@@ -1,8 +1,8 @@
 from dataclasses import dataclass
 import numpy as np
 from scipy.signal import lfilter
-from kernels import VolterraKernel2, ArrayF
-from engines import Volterra2Engine, DirectNumpyEngine
+from volterra.kernels import VolterraKernel2, ArrayF
+from volterra.engines import Volterra2Engine, DirectNumpyEngine
 
 
 @dataclass

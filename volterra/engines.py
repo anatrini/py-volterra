@@ -1,7 +1,7 @@
 from typing import Protocol
 import numpy as np
 from numpy.lib.stride_tricks import sliding_window_view
-from kernels import VolterraKernel2, ArrayF
+from volterra.kernels import VolterraKernel2, ArrayF
 
 
 class Volterra2Engine(Protocol):
