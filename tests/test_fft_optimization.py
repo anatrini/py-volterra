@@ -123,11 +123,12 @@ class TestFFTEngineCorrectness:
         assert proc.engine.use_fft is True
 
     def test_auto_selection_short_kernel(self, kernel_short, sample_rate):
-        """Processor should use time-domain for short kernels (N<128)."""
+        """Processor should use vectorized engine for short kernels (N<128) without Numba."""
         proc = VolterraProcessorFull(kernel_short, sample_rate=sample_rate, use_numba=False)
 
-        # Should have selected time-domain engine
-        assert isinstance(proc.engine, DiagonalNumpyEngine)
+        # Should have selected vectorized engine (faster than DiagonalNumpyEngine)
+        from volterra.engines_vectorized import VectorizedEngine
+        assert isinstance(proc.engine, VectorizedEngine)
 
     def test_fft_engine_different_block_sizes(self, kernel_long, test_signal, sample_rate):
         """FFT engine should work correctly with different block sizes."""

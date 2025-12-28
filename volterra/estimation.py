@@ -28,6 +28,7 @@ from dataclasses import dataclass
 from typing import Optional, Tuple, Dict
 import numpy as np
 from scipy import fft
+from scipy.interpolate import interp1d
 from volterra.kernels_full import VolterraKernelFull, ArrayF
 
 
@@ -105,8 +106,12 @@ class MultiToneEstimator:
         """
         Select frequencies avoiding harmonic collisions.
 
-        For order-k Volterra, avoid: f_i * m = f_j for m <= k
-        Uses prime-based spacing for optimal separation.
+        Uses logarithmic spacing to cover frequency range with denser
+        sampling at low frequencies.
+
+        Note: In theory, integer-period tones (f = k/T) eliminate spectral
+        leakage, but in practice, non-integer periods with cubic interpolation
+        of H(f) provides better FIR kernel reconstruction accuracy.
         """
         f_min = self.config.f_min
         f_max = self.config.f_max
@@ -214,20 +219,56 @@ class MultiToneEstimator:
         kernel_length: int
     ) -> ArrayF:
         """
-        Extract linear kernel from fundamental frequencies.
+        Extract linear kernel from fundamental frequencies with interpolation.
 
-        H1(f) = Y(f) / X(f)
+        Measures H1(f) = Y(f) / X(f) at tone frequencies, then interpolates
+        to fill the complete frequency grid before IRFFT.
         """
-        H1_freq = np.zeros(len(freqs_fft), dtype=complex)
+        # Measure H(f) at tone frequencies
+        measured_freqs = []
+        measured_H = []
 
         for f in frequencies:
             bin_f = np.argmin(np.abs(freqs_fft - f))
 
             if np.abs(X[bin_f]) > 1e-12:
-                H1_freq[bin_f] = Y[bin_f] / X[bin_f]
+                measured_freqs.append(freqs_fft[bin_f])
+                measured_H.append(Y[bin_f] / X[bin_f])
+
+        if len(measured_freqs) < 2:
+            # Not enough points for interpolation
+            return np.zeros(kernel_length, dtype=np.float64)
+
+        measured_freqs = np.array(measured_freqs)
+        measured_H = np.array(measured_H)
+
+        # Interpolate to fill all FFT bins (complex interpolation)
+        # Interpolate magnitude and phase separately for better results
+        mag = np.abs(measured_H)
+        phase = np.angle(measured_H)
+
+        # Add DC component if not measured (assume equal to lowest frequency)
+        if measured_freqs[0] > 0:
+            measured_freqs = np.concatenate([[0.0], measured_freqs])
+            mag = np.concatenate([[mag[0]], mag])
+            phase = np.concatenate([[phase[0]], phase])
+
+        # Create interpolators (cubic for smoother response)
+        # Use extrapolation to fill frequencies beyond measurement range
+        interp_mag = interp1d(measured_freqs, mag, kind='cubic',
+                             bounds_error=False, fill_value='extrapolate')
+        interp_phase = interp1d(measured_freqs, phase, kind='cubic',
+                               bounds_error=False, fill_value='extrapolate')
+
+        # Interpolate to all FFT frequencies
+        mag_interp = np.maximum(interp_mag(freqs_fft), 0.0)  # Ensure non-negative magnitude
+        phase_interp = interp_phase(freqs_fft)
+
+        # Reconstruct complex H(f)
+        H1_freq_interp = mag_interp * np.exp(1j * phase_interp)
 
         # Inverse FFT to time domain
-        h1_full = fft.irfft(H1_freq)
+        h1_full = fft.irfft(H1_freq_interp)
         return h1_full[:kernel_length]
 
     def _extract_h2_diagonal(

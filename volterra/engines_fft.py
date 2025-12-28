@@ -138,19 +138,19 @@ class FFTOptimizedEngine:
 
         if self.use_fft:
             # FFT-based convolution with precomputed kernels
-            y += self._fft_convolve(powers[1], self._fft_kernels['h1'], B)
+            y += self._fft_convolve(powers[1], self._fft_kernels['h1'], B, kernel.h1)
 
             if kernel.h2 is not None and kernel.h2_is_diagonal:
-                y += self._fft_convolve(powers[2], self._fft_kernels['h2'], B)
+                y += self._fft_convolve(powers[2], self._fft_kernels['h2'], B, kernel.h2)
 
             if kernel.h3_diagonal is not None:
-                y += self._fft_convolve(powers[3], self._fft_kernels['h3'], B)
+                y += self._fft_convolve(powers[3], self._fft_kernels['h3'], B, kernel.h3_diagonal)
 
             if kernel.h4_diagonal is not None:
-                y += self._fft_convolve(powers[4], self._fft_kernels['h4'], B)
+                y += self._fft_convolve(powers[4], self._fft_kernels['h4'], B, kernel.h4_diagonal)
 
             if kernel.h5_diagonal is not None:
-                y += self._fft_convolve(powers[5], self._fft_kernels['h5'], B)
+                y += self._fft_convolve(powers[5], self._fft_kernels['h5'], B, kernel.h5_diagonal)
 
         else:
             # Time-domain convolution for short kernels
@@ -204,7 +204,8 @@ class FFTOptimizedEngine:
         self,
         x_pow: ArrayF,
         H_fft: np.ndarray,
-        B: int
+        B: int,
+        h_kernel: ArrayF = None
     ) -> ArrayF:
         """
         FFT convolution with precomputed kernel FFT.
@@ -215,22 +216,34 @@ class FFTOptimizedEngine:
             x_pow: Signal power (x^n) extended with history
             H_fft: Precomputed FFT(kernel) at self._fft_size
             B: Block size to extract
+            h_kernel: Original kernel array (for dynamic resizing if needed)
 
         Returns:
             Convolution result (B,)
         """
-        # FFT of input signal
-        X_fft = fft.rfft(x_pow, n=self._fft_size)
+        N = len(self.kernel.h1)
 
-        # Multiply in frequency domain
-        Y_fft = X_fft * H_fft
+        # Check if block size exceeds precomputed size
+        required_len = N + B - 1
+        if required_len > self._fft_size:
+            # Block size exceeds precomputed size - use dynamic FFT size
+            fft_size = fft.next_fast_len(required_len)
 
-        # IFFT back to time domain
-        y_full = fft.irfft(Y_fft, n=self._fft_size)
+            # Recompute kernel FFT at new size
+            H_fft_resized = fft.rfft(h_kernel, n=fft_size)
+
+            # Use dynamic FFT size
+            X_fft = fft.rfft(x_pow, n=fft_size)
+            Y_fft = X_fft * H_fft_resized
+            y_full = fft.irfft(Y_fft, n=fft_size)
+        else:
+            # Use precomputed FFT size
+            X_fft = fft.rfft(x_pow, n=self._fft_size)
+            Y_fft = X_fft * H_fft
+            y_full = fft.irfft(Y_fft, n=self._fft_size)
 
         # Extract valid output region
         # For overlap-add: start at position N-1, extract B samples
-        N = len(self.kernel.h1)
         start = N - 1
         return y_full[start:start+B]
 
