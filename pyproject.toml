@@ -1,16 +1,16 @@
 [project]
 name = "py-volterra"
-version = "0.1.0"
-description = "Python implementation of Volterra series for nonlinear audio processing and harmonic distortion modeling (2nd/3rd order kernels)"
+version = "0.2.0"
+description = "Python implementation of Volterra series for nonlinear audio processing and harmonic distortion modeling (up to 5th order kernels)"
 authors = [
     {name = "anatrini"}
 ]
 readme = "README.md"
 requires-python = ">=3.10"
 license = {text = "MIT"}
-keywords = ["volterra", "audio", "nonlinear", "distortion", "dsp"]
+keywords = ["volterra", "audio", "nonlinear", "distortion", "dsp", "harmonic", "saturation"]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
     "Intended Audience :: Science/Research",
     "License :: OSI Approved :: MIT License",
@@ -28,10 +28,37 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# Performance optimization (10x speedup for higher orders)
+performance = [
+    "numba>=0.58.0",
+]
+
+# Testing dependencies
+test = [
+    "pytest>=7.4.0",
+    "pytest-cov>=4.1.0",
+    "pytest-xdist>=3.3.0",
+]
+
+# Development and examples
 dev = [
     "soundfile>=0.12.0",
     "matplotlib>=3.7.0",
+    "numba>=0.58.0",
     "pytest>=7.4.0",
+    "pytest-cov>=4.1.0",
+    "pytest-xdist>=3.3.0",
+    "ruff>=0.1.0",
+    "mypy>=1.7.0",
+]
+
+# Complete installation (all features)
+all = [
+    "soundfile>=0.12.0",
+    "matplotlib>=3.7.0",
+    "numba>=0.58.0",
+    "pytest>=7.4.0",
+    "pytest-cov>=4.1.0",
 ]
 
 [build-system]
