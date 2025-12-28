@@ -77,7 +77,14 @@ try:
 except ImportError:
     pass
 
-__version__ = "0.4.0"
+# Vectorized engines (NO Python loops)
+try:
+    from volterra.engines_vectorized import VectorizedEngine
+    __all_optional__.append("VectorizedEngine")
+except ImportError:
+    pass
+
+__version__ = "0.5.0"
 
 __all__ = [
     # Core types

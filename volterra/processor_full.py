@@ -26,6 +26,13 @@ try:
 except ImportError:
     FFT_ENGINES_AVAILABLE = False
 
+# Try to import vectorized engines
+try:
+    from volterra.engines_vectorized import VectorizedEngine
+    VECTORIZED_ENGINE_AVAILABLE = True
+except ImportError:
+    VECTORIZED_ENGINE_AVAILABLE = False
+
 
 @dataclass
 class VolterraProcessorFull:
@@ -93,10 +100,15 @@ class VolterraProcessorFull:
                     print(f"Using Numba time-domain engine (N={N}, max_order={self.kernel.max_order})")
                     object.__setattr__(self, 'engine', DiagonalNumbaEngine())
                 else:
-                    if self.use_numba and not NUMBA_AVAILABLE:
-                        print("Warning: Numba requested but not available, using NumPy")
-                    print(f"Using NumPy time-domain engine (N={N}, max_order={self.kernel.max_order})")
-                    object.__setattr__(self, 'engine', DiagonalNumpyEngine())
+                    # Prefer vectorized engine (NO Python loops) over DiagonalNumpyEngine
+                    if VECTORIZED_ENGINE_AVAILABLE:
+                        print(f"Using vectorized engine (N={N}, max_order={self.kernel.max_order})")
+                        object.__setattr__(self, 'engine', VectorizedEngine(max_block_size=4096))
+                    else:
+                        if self.use_numba and not NUMBA_AVAILABLE:
+                            print("Warning: Numba requested but not available")
+                        print(f"Using NumPy time-domain engine (N={N}, max_order={self.kernel.max_order})")
+                        object.__setattr__(self, 'engine', DiagonalNumpyEngine())
 
         # Estimate memory
         mem_kb = self.kernel.estimate_memory_bytes() / 1024
