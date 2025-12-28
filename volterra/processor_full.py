@@ -16,6 +16,16 @@ from volterra.engines_diagonal import (
     NUMBA_AVAILABLE
 )
 
+# Try to import FFT-optimized engines
+try:
+    from volterra.engines_fft import (
+        FFTOptimizedEngine,
+        FFTOptimizedNumbaEngine
+    )
+    FFT_ENGINES_AVAILABLE = True
+except ImportError:
+    FFT_ENGINES_AVAILABLE = False
+
 
 @dataclass
 class VolterraProcessorFull:
@@ -49,14 +59,44 @@ class VolterraProcessorFull:
         """Initialize processor and select optimal engine."""
         # Auto-select engine if not specified
         if self.engine is None:
-            if self.use_numba and NUMBA_AVAILABLE:
-                print(f"Using Numba-accelerated engine (max_order={self.kernel.max_order})")
-                self.engine = DiagonalNumbaEngine()
+            N = self.kernel.N
+
+            # Optimal selection based on kernel length
+            # FFT crossover: ~128 samples
+            if FFT_ENGINES_AVAILABLE and N >= 128:
+                # Use FFT-optimized engine for long kernels
+                if self.use_numba and NUMBA_AVAILABLE:
+                    print(f"Using FFT+Numba hybrid engine (N={N}, max_order={self.kernel.max_order})")
+                    object.__setattr__(
+                        self,
+                        'engine',
+                        FFTOptimizedNumbaEngine(
+                            self.kernel,
+                            fft_threshold=128,
+                            max_block_size=4096
+                        )
+                    )
+                else:
+                    print(f"Using FFT-optimized engine (N={N}, max_order={self.kernel.max_order})")
+                    object.__setattr__(
+                        self,
+                        'engine',
+                        FFTOptimizedEngine(
+                            self.kernel,
+                            fft_threshold=128,
+                            max_block_size=4096
+                        )
+                    )
             else:
-                if self.use_numba and not NUMBA_AVAILABLE:
-                    print("Warning: Numba requested but not available, using NumPy")
-                print(f"Using NumPy engine (max_order={self.kernel.max_order})")
-                object.__setattr__(self, 'engine', DiagonalNumpyEngine())
+                # Use time-domain engine for short kernels
+                if self.use_numba and NUMBA_AVAILABLE:
+                    print(f"Using Numba time-domain engine (N={N}, max_order={self.kernel.max_order})")
+                    object.__setattr__(self, 'engine', DiagonalNumbaEngine())
+                else:
+                    if self.use_numba and not NUMBA_AVAILABLE:
+                        print("Warning: Numba requested but not available, using NumPy")
+                    print(f"Using NumPy time-domain engine (N={N}, max_order={self.kernel.max_order})")
+                    object.__setattr__(self, 'engine', DiagonalNumpyEngine())
 
         # Estimate memory
         mem_kb = self.kernel.estimate_memory_bytes() / 1024

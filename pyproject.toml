@@ -1,6 +1,6 @@
 [project]
 name = "py-volterra"
-version = "0.2.0"
+version = "0.4.0"
 description = "Python implementation of Volterra series for nonlinear audio processing and harmonic distortion modeling (up to 5th order kernels)"
 authors = [
     {name = "anatrini"}
