@@ -2,13 +2,12 @@
 Volterra series implementation for nonlinear audio processing.
 
 This package provides tools for computing and applying Volterra kernels
-up to 5th order for harmonic distortion modeling and nonlinear system identification.
+up to 5th order for harmonic distortion modeling.
 
 Features:
 ---------
 - Diagonal kernels up to 5th order for real-time performance
-- Multi-tone kernel estimation for system identification
-- Optimized engines (NumPy and Numba) for efficient computation
+- Optimized engines (NumPy, Numba, FFT, Vectorized) for efficient computation
 - Block-based streaming processor with correct overlap-add
 - Mathematical correctness verified with comprehensive test suite
 
@@ -25,17 +24,8 @@ Typical usage:
     proc = VolterraProcessorFull(kernel, sample_rate=48000)
     output = proc.process(input_audio, block_size=512)
 
-System identification:
-----------------------
-    from volterra import MultiToneConfig, MultiToneEstimator
-
-    # Generate excitation signal
-    config = MultiToneConfig(num_tones=100, max_order=5)
-    estimator = MultiToneEstimator(config)
-    excitation, freqs = estimator.generate_excitation()
-
-    # Record system response and extract kernels
-    kernel = estimator.estimate_kernel(excitation, response, freqs)
+Note: System identification (swept-sine method) is planned for future release.
+      Current version focuses on kernel processing with known coefficients.
 """
 
 from volterra.kernels_full import VolterraKernelFull, ArrayF
@@ -46,10 +36,6 @@ from volterra.engines_diagonal import (
     NUMBA_AVAILABLE,
 )
 from volterra.processor_full import VolterraProcessorFull
-from volterra.estimation import (
-    MultiToneConfig,
-    MultiToneEstimator,
-)
 
 # Optimized engines (optional, requires Numba)
 try:
@@ -97,7 +83,4 @@ __all__ = [
     "NUMBA_AVAILABLE",
     # Processor
     "VolterraProcessorFull",
-    # Estimation
-    "MultiToneConfig",
-    "MultiToneEstimator",
 ] + __all_optional__

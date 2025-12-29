@@ -22,8 +22,6 @@ except ImportError:
 from volterra import (
     VolterraKernelFull,
     VolterraProcessorFull,
-    MultiToneConfig,
-    MultiToneEstimator
 )
 
 
