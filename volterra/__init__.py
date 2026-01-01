@@ -2,31 +2,69 @@
 Volterra series implementation for nonlinear audio processing.
 
 This package provides tools for computing and applying Volterra kernels
-up to 5th order for harmonic distortion modeling.
+up to 5th order for harmonic distortion modeling, plus system identification
+using Tensor-Train decomposition.
 
 Features:
 ---------
-- MIMO Tensor-Train (TT) based Volterra identification supporting multiple inputs/outputs
+- MIMO Tensor-Train (TT) based Volterra identification
 - Diagonal kernels up to 10th order for real-time performance
-- Optimized engines (NumPy, Numba, FFT, Vectorized) for efficient computation
-- Block-based streaming processor with correct overlap-add
-- Mathematical correctness verified with comprehensive test suite
+- Optimized engines (NumPy, Numba, FFT, Vectorized)
+- Block-based streaming processor with overlap-add
+- Composable pipelines (nonlinear → RIR acoustic chains)
+- Comprehensive test suite (165+ tests, 72% coverage)
 
-Typical usage:
---------------
+Workflow:
+---------
+
+**1. System Identification** (fit model from data):
+
+    from volterra import TTVolterraIdentifier
+
+    # Identify nonlinear system from input-output measurements
+    identifier = TTVolterraIdentifier(
+        memory_length=20,
+        order=3,
+        ranks=[1, 5, 3, 1]
+    )
+    identifier.fit(x_measured, y_measured)
+
+    # Use for prediction
+    y_pred = identifier.predict(x_new)
+
+**2. Real-time Processing** (apply known kernel):
+
     from volterra import VolterraKernelFull, VolterraProcessorFull
 
-    # Create a tube-saturation kernel
+    # Create kernel from polynomial coefficients
     kernel = VolterraKernelFull.from_polynomial_coeffs(
-        N=512, a1=0.9, a2=0.12, a3=0.03, a5=0.01
+        N=512, a1=0.9, a2=0.12, a3=0.03
     )
 
     # Process audio in blocks
     proc = VolterraProcessorFull(kernel, sample_rate=48000)
     output = proc.process(input_audio, block_size=512)
 
-System identification uses Tensor-Train decomposition for MIMO Volterra systems.
-See TTVolterraIdentifier for details.
+**3. Acoustic Chain Composition** (nonlinear → room):
+
+    from volterra import TTVolterraIdentifier, NonlinearThenRIR
+
+    # Stage 1: Identify source nonlinearity
+    identifier = TTVolterraIdentifier(memory_length=15, order=2, ranks=[1, 4, 1])
+    identifier.fit(x_source, y_source)
+
+    # Stage 2: Compose with room impulse response
+    chain = NonlinearThenRIR(
+        nonlinear_model=identifier,
+        rir=room_impulse_response,
+        sample_rate=48000
+    )
+
+    # Process through full chain
+    y_recorded = chain.process(x_instrument)
+
+See documentation for TTVolterraIdentifier, VolterraProcessorFull, and
+NonlinearThenRIR for detailed examples.
 """
 
 from volterra.kernels_full import VolterraKernelFull, ArrayF
@@ -42,6 +80,12 @@ from volterra.processor_full import VolterraProcessorFull
 from volterra.models import (
     TTVolterraIdentifier,
     TTVolterraConfig,
+)
+
+# Pipelines (composable processing chains)
+from volterra.pipelines import (
+    NonlinearThenRIR,
+    AcousticChainConfig,
 )
 
 # Optimized engines (optional, requires Numba)
@@ -93,4 +137,7 @@ __all__ = [
     # System identification
     "TTVolterraIdentifier",
     "TTVolterraConfig",
+    # Pipelines
+    "NonlinearThenRIR",
+    "AcousticChainConfig",
 ] + __all_optional__
