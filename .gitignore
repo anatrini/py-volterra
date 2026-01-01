@@ -79,3 +79,8 @@ docs/_templates/
 *.tmp
 *.bak
 *~
+
+# Internal development files
+SESSION*.md
+REFACTORING_NOTES.md
+*.mat
