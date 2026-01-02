@@ -51,6 +51,11 @@ from volterra.tt import (
     TTALSConfig,
     TTMALSConfig,
 )
+from volterra.models.tt_predict import (
+    predict_diagonal_volterra,
+    predict_general_volterra_sliding,
+    predict_with_warmup,
+)
 
 
 @dataclass
@@ -371,21 +376,24 @@ class TTVolterraIdentifier:
         T_valid = T - self.memory_length + 1
         y_pred = np.zeros((T_valid, O))
 
-        # For each output, evaluate TT model
-        # This is a PLACEHOLDER - full implementation would use proper convolution
-        warnings.warn(
-            "predict() is a placeholder implementation. "
-            "Full TT-Volterra prediction requires proper memory-based convolution.",
-            UserWarning
-        )
+        # Check if using diagonal mode (all ranks = 1)
+        diagonal_mode = all(r == 1 for r in self.ranks)
 
-        # Simplified: use first memory_length samples only
+        # For each output, use proper sliding-window prediction
         for o in range(O):
             tt_model = self.tt_models_[o]
-            x_mem = x_canon[:self.memory_length, 0]  # (N,)
-            y_o_sample = tt_matvec(tt_model.cores, x_mem)
-            # For now, just replicate this value
-            y_pred[:, o] = y_o_sample
+            x_o = x_canon[:, 0] if I > 1 else x_canon[:, 0]
+
+            if diagonal_mode:
+                # Use optimized diagonal prediction
+                y_pred[:, o] = predict_diagonal_volterra(
+                    tt_model.cores, x_o, self.memory_length
+                )
+            else:
+                # Use general TT-matvec sliding window
+                y_pred[:, o] = predict_general_volterra_sliding(
+                    tt_model.cores, x_o, self.memory_length
+                )
 
         # Return in original format
         if O == 1:

@@ -300,8 +300,14 @@ class TestTTALS:
         y = np.random.randn(100)
 
         # Wrong number of ranks
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="Need 3 ranks"):
             tt_als(x, y, memory_length=5, order=2, ranks=[1, 2])
+
+        # Non-diagonal ranks - issues warning and falls back to diagonal
+        with pytest.warns(UserWarning, match="non-diagonal TT"):
+            cores, info = tt_als(x, y, memory_length=5, order=2, ranks=[1, 2, 1])
+            # Should fall back to diagonal (all ranks = 1)
+            assert cores[0].shape == (1, 5, 1)
 
         # Invalid boundary ranks
         with pytest.raises(ValueError):

@@ -305,7 +305,7 @@ class TestTTVolterraKernelExtraction:
         identifier = TTVolterraIdentifier(
             memory_length=5,
             order=2,
-            ranks=[1, 2, 1]
+            ranks=[1, 1, 1]  # Diagonal ranks
         )
         identifier.fit(x, y)
 
@@ -313,7 +313,7 @@ class TestTTVolterraKernelExtraction:
 
         assert tt_kernels.ndim == 2  # order=2
         assert tt_kernels.shape == (5, 5)  # memory_length=5
-        assert tt_kernels.ranks == (1, 2, 1)
+        assert tt_kernels.ranks == (1, 1, 1)  # Diagonal TT
 
     def test_get_kernels_mimo(self):
         """get_kernels() should return correct kernels for each output."""
@@ -323,14 +323,14 @@ class TestTTVolterraKernelExtraction:
         identifier = TTVolterraIdentifier(
             memory_length=5,
             order=2,
-            ranks=[1, 3, 1]
+            ranks=[1, 1, 1]  # Diagonal ranks
         )
         identifier.fit(x, y)
 
         # Get kernels for each output
         for o in range(3):
             tt_kernels = identifier.get_kernels(output_idx=o)
-            assert tt_kernels.ranks == (1, 3, 1)
+            assert tt_kernels.ranks == (1, 1, 1)  # Diagonal TT
 
     def test_get_kernels_invalid_output_idx(self):
         """get_kernels() with invalid output index should raise error."""
@@ -340,7 +340,7 @@ class TestTTVolterraKernelExtraction:
         identifier = TTVolterraIdentifier(
             memory_length=5,
             order=2,
-            ranks=[1, 2, 1]
+            ranks=[1, 1, 1]  # Diagonal ranks
         )
         identifier.fit(x, y)
 
