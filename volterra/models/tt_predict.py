@@ -7,7 +7,11 @@ Implements proper causal filtering with memory for Volterra prediction.
 import numpy as np
 from typing import List
 from volterra.tt.tt_tensor import tt_matvec
-from volterra.tt.tt_solvers_simple import evaluate_diagonal_volterra, build_delay_matrix_simple
+from volterra.tt.tt_solvers_simple import (
+    evaluate_diagonal_volterra,
+    build_delay_matrix_simple,
+    build_delay_matrix_mimo,
+)
 
 
 def predict_diagonal_volterra(
@@ -147,3 +151,48 @@ def predict_with_warmup(
     y_full[N-1:] = y_valid
 
     return y_full
+
+
+def predict_diagonal_volterra_mimo(
+    cores_per_input: List[List[np.ndarray]],
+    x: np.ndarray,
+    memory_length: int
+) -> np.ndarray:
+    """
+    Predict using diagonal Volterra MIMO model (additive).
+
+    Model: y(t) = sum_{i=1}^I sum_{m=1}^M sum_{k=0}^{N-1} h_{i,m}[k] * x_i[t-k]^m
+
+    Parameters
+    ----------
+    cores_per_input : List[List[np.ndarray]]
+        List of I core sets, each containing M cores of shape (1, N, 1)
+    x : np.ndarray
+        Input signals, shape (T, I)
+    memory_length : int
+        Memory length N
+
+    Returns
+    -------
+    y_pred : np.ndarray
+        Predicted output, shape (T - N + 1,)
+
+    Notes
+    -----
+    Additive MIMO model: each input has its own Volterra kernels,
+    outputs are summed.
+    """
+    T, I = x.shape
+
+    # Build delay matrices for each input
+    X_delays = build_delay_matrix_mimo(x, memory_length)
+    T_valid = X_delays[0].shape[0]
+
+    # Initialize output
+    y_pred = np.zeros(T_valid)
+
+    # Sum contributions from all inputs
+    for i in range(I):
+        y_pred += evaluate_diagonal_volterra(cores_per_input[i], X_delays[i])
+
+    return y_pred

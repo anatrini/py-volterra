@@ -47,12 +47,14 @@ from volterra.tt import (
     TTTensor,
     tt_als,
     tt_mals,
+    tt_rls,
     tt_matvec,
     TTALSConfig,
     TTMALSConfig,
 )
 from volterra.models.tt_predict import (
     predict_diagonal_volterra,
+    predict_diagonal_volterra_mimo,
     predict_general_volterra_sliding,
     predict_with_warmup,
 )
@@ -66,11 +68,11 @@ class TTVolterraConfig:
     Parameters
     ----------
     solver : str, default='als'
-        Solver type: 'als' (fixed-rank) or 'mals' (adaptive-rank)
+        Solver type: 'als' (batch fixed-rank), 'mals' (adaptive-rank), or 'rls' (online/adaptive)
     max_iter : int, default=100
-        Maximum number of ALS sweeps
+        Maximum number of ALS/MALS sweeps (not used for RLS)
     tol : float, default=1e-6
-        Convergence tolerance (relative change in loss)
+        Convergence tolerance (relative change in loss, not used for RLS)
     regularization : float, default=1e-8
         Tikhonov regularization for least-squares stability
     rank_adaptation : bool, default=False
@@ -83,6 +85,9 @@ class TTVolterraConfig:
         Print iteration progress
     diagonal_only : bool, default=False
         If True, identify diagonal Volterra kernels only (memory polynomial)
+    forgetting_factor : float, default=0.99
+        RLS forgetting factor (only for solver='rls'), λ ∈ (0, 1]
+        λ = 1: infinite memory, λ < 1: exponential forgetting
     """
     solver: str = 'als'
     max_iter: int = 100
@@ -93,11 +98,12 @@ class TTVolterraConfig:
     rank_tol: float = 1e-4
     verbose: bool = False
     diagonal_only: bool = False
+    forgetting_factor: float = 0.99
 
     def __post_init__(self):
         """Validate configuration."""
-        if self.solver not in ('als', 'mals'):
-            raise ValueError(f"Solver must be 'als' or 'mals', got '{self.solver}'")
+        if self.solver not in ('als', 'mals', 'rls'):
+            raise ValueError(f"Solver must be 'als', 'mals', or 'rls', got '{self.solver}'")
         if self.rank_adaptation and self.solver != 'mals':
             warnings.warn(
                 "rank_adaptation=True requires solver='mals', setting solver='mals'",
@@ -275,15 +281,8 @@ class TTVolterraIdentifier:
             if self.config.verbose:
                 print(f"  Output {o+1}/{O}...")
 
-            # For MIMO, we would need to handle multi-input properly
-            # For now, simplified to first input channel
-            if I > 1:
-                warnings.warn(
-                    f"MIMO with I={I} inputs: using first input channel only. "
-                    "Full MIMO TT-Volterra requires tensor product design matrices.",
-                    UserWarning
-                )
-            x_o = x_canon[:, 0] if I > 1 else x_canon[:, 0]
+            # Prepare input data (MIMO or SISO)
+            x_o = x_canon if I > 1 else x_canon[:, 0]
 
             # Choose solver
             if self.config.solver == 'als':
@@ -317,10 +316,34 @@ class TTVolterraIdentifier:
                     self.ranks,
                     config=solver_config
                 )
+            elif self.config.solver == 'rls':
+                # RLS currently only supports SISO
+                if I > 1:
+                    warnings.warn(
+                        f"RLS solver currently only supports SISO. Using first input channel from I={I} inputs.",
+                        UserWarning
+                    )
+                    x_o = x_canon[:, 0]
+                cores, info = tt_rls(
+                    x_o, y_o,
+                    self.memory_length,
+                    self.order,
+                    self.ranks,
+                    forgetting_factor=self.config.forgetting_factor,
+                    regularization=self.config.regularization,
+                    verbose=self.config.verbose
+                )
             else:
                 raise ValueError(f"Unknown solver: {self.config.solver}")
 
-            tt_models.append(TTTensor(cores))
+            # Handle MIMO vs SISO cores
+            if info.get('mimo', False):
+                # MIMO: cores is List[List[np.ndarray]] (cores_per_input)
+                # Store as-is for now, will handle in predict
+                tt_models.append(cores)  # cores_per_input
+            else:
+                # SISO: cores is List[np.ndarray]
+                tt_models.append(TTTensor(cores))
             fit_infos.append(info)
 
         self.tt_models_ = tt_models
@@ -379,21 +402,33 @@ class TTVolterraIdentifier:
         # Check if using diagonal mode (all ranks = 1)
         diagonal_mode = all(r == 1 for r in self.ranks)
 
+        # Check if MIMO from fit info
+        is_mimo = self.fit_info_['per_output'][0].get('mimo', False)
+
         # For each output, use proper sliding-window prediction
         for o in range(O):
             tt_model = self.tt_models_[o]
-            x_o = x_canon[:, 0] if I > 1 else x_canon[:, 0]
 
-            if diagonal_mode:
-                # Use optimized diagonal prediction
-                y_pred[:, o] = predict_diagonal_volterra(
-                    tt_model.cores, x_o, self.memory_length
+            if is_mimo and I > 1:
+                # MIMO: cores_per_input, use all input channels
+                # Note: MIMO always uses diagonal mode (falls back in tt_als if ranks > 1)
+                y_pred[:, o] = predict_diagonal_volterra_mimo(
+                    tt_model, x_canon, self.memory_length
                 )
             else:
-                # Use general TT-matvec sliding window
-                y_pred[:, o] = predict_general_volterra_sliding(
-                    tt_model.cores, x_o, self.memory_length
-                )
+                # SISO: standard prediction
+                x_o = x_canon[:, 0]  # Extract first channel
+
+                if diagonal_mode:
+                    # Use optimized diagonal prediction
+                    y_pred[:, o] = predict_diagonal_volterra(
+                        tt_model.cores, x_o, self.memory_length
+                    )
+                else:
+                    # Use general TT-matvec sliding window
+                    y_pred[:, o] = predict_general_volterra_sliding(
+                        tt_model.cores, x_o, self.memory_length
+                    )
 
         # Return in original format
         if O == 1:
@@ -433,7 +468,19 @@ class TTVolterraIdentifier:
                 f"output_idx must be in [0, {self.n_outputs_-1}], got {output_idx}"
             )
 
-        return self.tt_models_[output_idx]
+        tt_model = self.tt_models_[output_idx]
+
+        # Handle MIMO case where tt_model is cores_per_input (list of lists)
+        if isinstance(tt_model, list) and isinstance(tt_model[0], list):
+            # MIMO: return first input's cores as TTTensor
+            warnings.warn(
+                "MIMO model: returning kernels for first input channel only. "
+                "Access fit_info_['per_output'][0]['cores_per_input'] for all inputs.",
+                UserWarning
+            )
+            return TTTensor(tt_model[0])
+
+        return tt_model
 
     def __repr__(self) -> str:
         """String representation."""

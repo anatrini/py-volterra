@@ -24,8 +24,11 @@ import warnings
 # Import TT-ALS implementations
 from volterra.tt.tt_solvers_simple import (
     fit_diagonal_volterra_als,
+    fit_diagonal_volterra_mimo_als,
+    fit_diagonal_volterra_rls,
     evaluate_diagonal_volterra,
     build_delay_matrix_simple,
+    build_delay_matrix_mimo,
 )
 
 
@@ -304,42 +307,74 @@ def tt_als(
     if ranks[0] != 1 or ranks[-1] != 1:
         raise ValueError(f"Boundary ranks must be 1, got r_0={ranks[0]}, r_M={ranks[-1]}")
 
-    # For MIMO, use first input channel (simplified)
-    if x.ndim == 2:
-        x = x[:, 0]
-
     # Check if ranks are compatible with diagonal mode (all ranks = 1)
     diagonal_mode = all(r == 1 for r in ranks)
 
-    if diagonal_mode:
-        # Use optimized diagonal implementation (memory polynomial)
-        cores, info = fit_diagonal_volterra_als(
-            x, y,
-            memory_length, order,
-            max_iter=config.max_iter,
-            tol=config.tol,
-            regularization=config.regularization,
-            verbose=config.verbose
-        )
+    # Handle MIMO vs SISO
+    is_mimo = x.ndim == 2
+
+    if is_mimo:
+        # MIMO: use additive model with separate kernels per input
+        if diagonal_mode:
+            cores_per_input, info = fit_diagonal_volterra_mimo_als(
+                x, y,
+                memory_length, order,
+                max_iter=config.max_iter,
+                tol=config.tol,
+                regularization=config.regularization,
+                verbose=config.verbose
+            )
+            # For compatibility, return cores from first input (will be handled properly in TTVolterraIdentifier)
+            cores = cores_per_input
+            info['mimo'] = True
+            info['cores_per_input'] = cores_per_input
+        else:
+            warnings.warn(
+                f"Ranks {ranks} indicate non-diagonal TT. "
+                "Full general TT-Volterra for MIMO is complex. "
+                "Falling back to diagonal MIMO mode.",
+                UserWarning
+            )
+            cores_per_input, info = fit_diagonal_volterra_mimo_als(
+                x, y,
+                memory_length, order,
+                max_iter=config.max_iter,
+                tol=config.tol,
+                regularization=config.regularization,
+                verbose=config.verbose
+            )
+            cores = cores_per_input
+            info['mimo'] = True
+            info['cores_per_input'] = cores_per_input
     else:
-        # For higher ranks, use initialization and warn
-        # Full general TT-Volterra requires complex tensor unfolding
-        warnings.warn(
-            f"Ranks {ranks} indicate non-diagonal TT. "
-            "Full general TT-ALS for Volterra is complex. "
-            "Falling back to diagonal (memory polynomial) mode. "
-            "Set all ranks to 1 for diagonal Volterra.",
-            UserWarning
-        )
-        # Fall back to diagonal
-        cores, info = fit_diagonal_volterra_als(
-            x, y,
-            memory_length, order,
-            max_iter=config.max_iter,
-            tol=config.tol,
-            regularization=config.regularization,
-            verbose=config.verbose
-        )
+        # SISO: standard diagonal Volterra
+        if diagonal_mode:
+            cores, info = fit_diagonal_volterra_als(
+                x, y,
+                memory_length, order,
+                max_iter=config.max_iter,
+                tol=config.tol,
+                regularization=config.regularization,
+                verbose=config.verbose
+            )
+            info['mimo'] = False
+        else:
+            warnings.warn(
+                f"Ranks {ranks} indicate non-diagonal TT. "
+                "Full general TT-ALS for Volterra is complex. "
+                "Falling back to diagonal (memory polynomial) mode. "
+                "Set all ranks to 1 for diagonal Volterra.",
+                UserWarning
+            )
+            cores, info = fit_diagonal_volterra_als(
+                x, y,
+                memory_length, order,
+                max_iter=config.max_iter,
+                tol=config.tol,
+                regularization=config.regularization,
+                verbose=config.verbose
+            )
+            info['mimo'] = False
 
     return cores, info
 
@@ -421,5 +456,106 @@ def tt_mals(
         'rank_adaptation_steps': 0,
         'message': 'Placeholder implementation - no rank adaptation performed'
     }
+
+    return cores, info
+
+
+def tt_rls(
+    x: np.ndarray,
+    y: np.ndarray,
+    memory_length: int,
+    order: int,
+    ranks: List[int],
+    forgetting_factor: float = 0.99,
+    regularization: float = 1e-4,
+    verbose: bool = False
+) -> Tuple[List[np.ndarray], dict]:
+    """
+    Online/adaptive diagonal TT-Volterra identification using Recursive Least Squares.
+
+    This solver processes data sample-by-sample, updating the model adaptively.
+    Suitable for time-varying systems and online learning scenarios.
+
+    Parameters
+    ----------
+    x : np.ndarray
+        Input signal, shape (T,) for SISO
+    y : np.ndarray
+        Output signal, shape (T,)
+    memory_length : int
+        Memory length N (number of delays)
+    order : int
+        Volterra order M (number of TT cores)
+    ranks : List[int]
+        TT ranks [r_0=1, r_1, ..., r_M=1] - only diagonal (all 1s) supported
+    forgetting_factor : float, default=0.99
+        RLS forgetting factor λ ∈ (0, 1]
+        λ = 1: infinite memory (standard RLS)
+        λ < 1: exponential forgetting (for time-varying systems)
+    regularization : float, default=1e-4
+        Initial diagonal loading for inverse correlation matrix
+    verbose : bool, default=False
+        Print progress
+
+    Returns
+    -------
+    cores : List[np.ndarray]
+        Final adapted TT cores
+    info : dict
+        Adaptation info including MSE history
+
+    Raises
+    ------
+    ValueError
+        If inputs are invalid or MIMO is provided (not yet supported for RLS)
+
+    Examples
+    --------
+    >>> # Online identification of time-varying system
+    >>> x = np.random.randn(10000)
+    >>> y = generate_time_varying_output(x)
+    >>> cores, info = tt_rls(x, y, memory_length=10, order=3,
+    ...                       ranks=[1,1,1,1], forgetting_factor=0.98)
+    >>> plt.plot(info['mse_history'])  # Show adaptation trajectory
+
+    Notes
+    -----
+    RLS is particularly useful for:
+    - Time-varying nonlinear systems
+    - Online/streaming data processing
+    - Adaptive filters for changing environments
+    - Systems with parameter drift
+
+    For stationary systems, batch ALS (tt_als) is typically more accurate.
+    """
+    # Validate inputs
+    if x.ndim > 1:
+        raise ValueError("RLS currently only supports SISO systems (1D input)")
+    if y.ndim != 1:
+        raise ValueError(f"Output y must be 1D, got shape {y.shape}")
+
+    # Validate ranks
+    if len(ranks) != order + 1:
+        raise ValueError(f"Need {order+1} ranks for order {order}, got {len(ranks)}")
+    if ranks[0] != 1 or ranks[-1] != 1:
+        raise ValueError(f"Boundary ranks must be 1, got r_0={ranks[0]}, r_M={ranks[-1]}")
+
+    # Check diagonal mode
+    if not all(r == 1 for r in ranks):
+        warnings.warn(
+            f"RLS only supports diagonal TT. Ranks {ranks} will be treated as diagonal.",
+            UserWarning
+        )
+
+    # Call RLS implementation
+    cores, info = fit_diagonal_volterra_rls(
+        x, y,
+        memory_length, order,
+        forgetting_factor=forgetting_factor,
+        regularization=regularization,
+        verbose=verbose
+    )
+
+    info['mimo'] = False
 
     return cores, info

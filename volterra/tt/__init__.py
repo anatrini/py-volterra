@@ -22,6 +22,7 @@ from volterra.tt.tt_tensor import (
 from volterra.tt.tt_solvers import (
     tt_als,
     tt_mals,
+    tt_rls,
     TTALSConfig,
     TTMALSConfig,
 )
@@ -33,6 +34,7 @@ __all__ = [
     "tt_to_full",
     "tt_als",
     "tt_mals",
+    "tt_rls",
     "TTALSConfig",
     "TTMALSConfig",
 ]
