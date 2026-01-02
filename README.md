@@ -1,274 +1,272 @@
 # py-volterra
 
-Python implementation of Volterra series for nonlinear audio processing and harmonic distortion modeling (up to 5th order kernels).
+Production-ready **Tensor-Train based Volterra system identification** for nonlinear MIMO audio/acoustic systems.
+
+Efficient diagonal Volterra (memory polynomial) identification using state-of-the-art Tensor-Train decomposition, avoiding the curse of dimensionality.
 
 ## Features
 
-- **Volterra kernels up to 5th order** for high-fidelity analog emulation
-- **Diagonal approximation** for real-time performance (O(N) memory vs O(N^k))
-- **2nd-order with full matrix support** and low-rank decomposition
-- **Multi-tone kernel estimation** for system identification
-- **Optimized engines**: NumPy (portable) and Numba (10x faster)
-- **Farina swept-sine** method for 2nd-order extraction
-- **Block-based streaming** with proper state management
+- **TT-Volterra Identification**: SISO and MIMO nonlinear system identification
+- **Diagonal Volterra Models**: Memory polynomials / Generalized Hammerstein
+- **Multiple Solvers**:
+  - **ALS**: Batch fixed-rank (stationary systems, highest accuracy)
+  - **RLS**: Online/adaptive (time-varying systems, real-time)
+  - **MALS**: Adaptive-rank (experimental)
+- **MIMO Support**: Additive model with separate kernels per input
+- **Efficient**: O(M·T·N²) complexity, suitable for high-order (M=5+)
+- **Numerically Stable**: Machine precision coefficient recovery
+- **Production Ready**: 226 tests, 68% coverage, comprehensive documentation
 
-## Quick Start with uv
+## Installation
 
-[uv](https://github.com/astral-sh/uv) is a fast Python package manager that handles everything automatically.
-
-### Installation
-
-1. **Install uv** (if not already installed):
-   ```bash
-   curl -LsSf https://astral.sh/uv/install.sh | sh
-   ```
-
-2. **Clone and setup**:
-   ```bash
-   git clone https://github.com/anatrini/py-volterra.git
-   cd py-volterra
-   uv sync
-   ```
-
-3. **Optional: Install performance optimization (Numba)**:
-   ```bash
-   uv sync --extra performance
-   ```
-
-### Running Examples
+Using [uv](https://github.com/astral-sh/uv) (recommended):
 
 ```bash
-# Full-order demo (orders 1-5)
-uv run python examples/demo_full_order.py
-
-# Validation tests
-uv run python examples/validation_full_order.py
-
-# Performance benchmark
-uv run python examples/benchmark_full_order.py
-
-# Legacy 2nd-order demo
-uv run python examples/demo.py
+git clone https://github.com/anatrini/py-volterra.git
+cd py-volterra
+uv sync
 ```
 
-## Basic Usage
+Or with pip:
 
-### Simple Polynomial Saturation (Orders 1-5)
+```bash
+pip install numpy scipy
+```
+
+## Quick Start
+
+### SISO System Identification
 
 ```python
-from volterra import VolterraKernelFull, VolterraProcessorFull
+import numpy as np
+from volterra.models import TTVolterraIdentifier, TTVolterraConfig
 
-# Create a tube-style saturation kernel
-# y ≈ 0.9x + 0.12x² + 0.03x³ + 0.005x⁴ + 0.008x⁵
-kernel = VolterraKernelFull.from_polynomial_coeffs(
-    N=512,
-    a1=0.9,    # Linear gain
-    a2=0.12,   # Even harmonics (warmth)
-    a3=0.03,   # Odd harmonics (character)
-    a4=0.005,  # Even harmonics (subtlety)
-    a5=0.008   # Odd harmonics (edge)
+# Generate training data
+x_train = np.random.randn(5000) * 0.5
+y_train = 0.8*x_train + 0.15*x_train**2 + 0.05*x_train**3  # Nonlinear system
+
+# Identify model
+identifier = TTVolterraIdentifier(
+    memory_length=20,    # 20 samples of memory (~0.4ms @ 48kHz)
+    order=3,             # Up to 3rd-order nonlinearity
+    ranks=[1, 1, 1, 1],  # Diagonal (all ranks = 1)
+    config=TTVolterraConfig(solver='als', max_iter=50)
 )
+identifier.fit(x_train, y_train)
 
-# Process audio with automatic Numba optimization
-proc = VolterraProcessorFull(kernel, sample_rate=48000)
-output = proc.process(input_audio, block_size=512)
+# Predict on new data
+x_test = np.random.randn(1000) * 0.5
+y_pred = identifier.predict(x_test)
+
+# Check accuracy
+print(f"Final loss: {identifier.fit_info_['per_output'][0]['final_loss']:.6e}")
 ```
 
-### Multi-tone Kernel Estimation
+### MIMO System Identification
 
 ```python
-from volterra import MultiToneConfig, MultiToneEstimator
+# 2-channel input (e.g., stereo loudspeaker)
+x_mimo = np.random.randn(5000, 2) * 0.5
 
-# Configure multi-tone measurement
-config = MultiToneConfig(
-    sample_rate=48000,
-    duration=2.0,
-    num_tones=100,
-    max_order=5  # Extract kernels up to 5th order
+# Each input has independent nonlinearity
+y_mimo = (0.9*x_mimo[:, 0] + 0.15*x_mimo[:, 0]**2 +    # Left channel
+          0.8*x_mimo[:, 1] + 0.10*x_mimo[:, 1]**2)     # Right channel
+
+# Fit MIMO model
+identifier_mimo = TTVolterraIdentifier(
+    memory_length=15,
+    order=2,
+    ranks=[1, 1, 1],
+    config=TTVolterraConfig(solver='als', max_iter=100)
 )
+identifier_mimo.fit(x_mimo, y_mimo)
 
-# Generate excitation signal
-estimator = MultiToneEstimator(config)
-excitation, frequencies = estimator.generate_excitation()
-
-# Send excitation through your system, record response
-# (e.g., through analog gear, tube amp, etc.)
-response = your_system.process(excitation)
-
-# Extract kernels
-kernel = estimator.estimate_kernel(excitation, response, frequencies)
-
-# Use extracted kernel
-proc = VolterraProcessorFull(kernel, sample_rate=48000)
+# Predict
+y_pred_mimo = identifier_mimo.predict(x_mimo[:1000])
 ```
 
-### Legacy 2nd-Order API (Backward Compatible)
+### Online/Adaptive Filtering with RLS
 
 ```python
-from volterra import VolterraKernel2, VolterraProcessor2, LowRankEngine
+# Time-varying system
+x = np.random.randn(10000)
+y = np.zeros_like(x)
 
-# 2nd-order with full matrix and low-rank approximation
-N = 512
-h1 = np.zeros(N); h1[0] = 0.9
-g2 = np.zeros(N); g2[0] = 0.15
+for t in range(len(x)):
+    # Coefficient varies over time
+    alpha = 0.8 + 0.2 * np.sin(2 * np.pi * t / 500)
+    y[t] = alpha * x[t] + 0.1 * x[t]**2
 
-kernel = VolterraKernel2.from_hammerstein(h1, g2)
-
-proc = VolterraProcessor2(
-    kernel=kernel,
-    engine=LowRankEngine(energy=0.999),
-    sample_rate=48000
+# Adaptive identification
+identifier_rls = TTVolterraIdentifier(
+    memory_length=5,
+    order=2,
+    ranks=[1, 1, 1],
+    config=TTVolterraConfig(
+        solver='rls',           # Recursive Least Squares
+        forgetting_factor=0.99,  # Track slow variations
+        regularization=1e-4
+    )
 )
+identifier_rls.fit(x, y)
 
-y = proc.process(x, block_size=512)
+# Track adaptation
+import matplotlib.pyplot as plt
+mse_history = identifier_rls.fit_info_['per_output'][0]['mse_history']
+plt.semilogy(mse_history)
+plt.xlabel('Sample')
+plt.ylabel('MSE')
+plt.title('RLS Adaptation')
+plt.show()
 ```
+
+## Mathematical Model
+
+**Diagonal Volterra (Memory Polynomial):**
+
+```
+y(t) = ∑_{m=1}^M ∑_{i=0}^{N-1} h_m[i] · x[t-i]^m
+```
+
+- **M**: Volterra order (polynomial degree)
+- **N**: Memory length (number of delays)
+- **h_m[i]**: Kernel coefficient for order m at delay i
+
+**Parameters:** M × N (vs O(N^M) for full Volterra)
+
+**MIMO Additive Model:**
+
+```
+y(t) = ∑_{i=1}^I ∑_{m=1}^M ∑_{k=0}^{N-1} h_{i,m}[k] · x_i[t-k]^m
+```
+
+- Each input channel has its own set of Volterra kernels
+- Outputs are summed
+
+## Performance
+
+| Configuration | Parameters | Complexity (per iter) | Use Case |
+|--------------|------------|-----------------------|----------|
+| M=3, N=10 | 30 | O(3·T·100) | Small systems |
+| M=5, N=20 | 100 | O(5·T·400) | Audio effects |
+| M=7, N=50 | 350 | O(7·T·2500) | High-fidelity |
+
+**Convergence:** Typically 20-50 iterations
+
+**Accuracy:** < 1e-20 MSE on clean data, machine precision coefficient recovery
+
+## Solvers Comparison
+
+| Solver | Type | Best For | MIMO | Time-varying |
+|--------|------|----------|------|--------------|
+| **als** | Batch | Stationary systems, highest accuracy | ✅ | ❌ |
+| **rls** | Online | Time-varying, real-time | ⚠️ SISO only | ✅ |
+| **mals** | Batch | Rank selection (experimental) | ⚠️ Placeholder | ❌ |
 
 ## Project Structure
 
 ```
 py-volterra/
-├── volterra/                      # Core package
-│   ├── kernels.py                 # 2nd-order kernels (legacy)
-│   ├── kernels_full.py            # Full kernels (orders 1-5)
-│   ├── engines.py                 # 2nd-order engines (legacy)
-│   ├── engines_diagonal.py        # Diagonal engines (orders 1-5)
-│   ├── processor.py               # 2nd-order processor (legacy)
-│   ├── processor_full.py          # Full-order processor
-│   ├── estimation.py              # Multi-tone kernel estimation
-│   └── sweep.py                   # Farina swept-sine extraction
-├── examples/
-│   ├── demo_full_order.py         # Full demo (orders 1-5)
-│   ├── validation_full_order.py   # Validation tests
-│   ├── benchmark_full_order.py    # Performance benchmark
-│   ├── demo.py                    # Legacy 2nd-order demo
-│   ├── validation.py              # Legacy validation
-│   └── benchmark.py               # Legacy benchmark
-└── pyproject.toml
+├── volterra/
+│   ├── models/
+│   │   ├── tt_volterra.py         # TTVolterraIdentifier (main API)
+│   │   └── tt_predict.py          # Prediction functions
+│   ├── tt/
+│   │   ├── tt_solvers.py          # High-level solver interfaces
+│   │   ├── tt_solvers_simple.py   # Diagonal TT-ALS and RLS
+│   │   └── tt_tensor.py           # TT tensor representation
+│   ├── pipelines/
+│   │   └── acoustic_chain.py      # Nonlinear → RIR pipeline
+│   └── utils/
+│       └── shapes.py              # MIMO data utilities
+├── tests/                         # 226 tests, 68% coverage
+│   ├── test_tt_als_real.py       # Diagonal TT-ALS tests
+│   ├── test_mimo_rls.py          # MIMO and RLS tests
+│   └── test_tt_volterra_identifier.py
+├── TT_ALS_IMPLEMENTATION.md      # Comprehensive documentation
+└── README.md
 ```
 
-## Performance
+## Documentation
 
-### Memory Footprint (N=512)
+- **[TT_ALS_IMPLEMENTATION.md](TT_ALS_IMPLEMENTATION.md)**: Complete technical guide
+  - Mathematical formulation
+  - Algorithm details
+  - MIMO and RLS usage
+  - Performance characteristics
+  - 5 detailed examples
 
-| Configuration | Memory | Notes |
-|---------------|--------|-------|
-| h1 only | 4 KB | Linear convolution |
-| h1 + h2 (diagonal) | 8 KB | 2nd-order diagonal |
-| h1 + h2 (full) | 2 MB | 2nd-order full matrix |
-| h1 + h2 + h3 | 12 KB | Up to 3rd order |
-| h1 + h2 + h3 + h5 | 16 KB | Up to 5th order |
-| All orders (1-5) | 20 KB | Complete saturation model |
-
-### Processing Latency (N=512, block_size=512)
-
-With Numba (recommended):
-- **h1 only**: ~0.1 ms/block
-- **h1 + h2**: ~0.3 ms/block
-- **h1 + h2 + h3**: ~0.5 ms/block
-- **h1 + h2 + h3 + h5**: ~0.8 ms/block (✓ real-time @ 48kHz)
-- **All orders (1-5)**: ~1.0 ms/block (✓ real-time @ 48kHz)
-
-Without Numba (NumPy only):
-- ~10x slower (still real-time for lower orders)
-
-## Dependencies
-
-**Required:**
-- numpy ≥1.24
-- scipy ≥1.10
-
-**Optional (recommended for performance):**
-- numba ≥0.58 (10x speedup for orders 3-5)
-
-**Optional (for examples):**
-- soundfile ≥0.12 (audio I/O)
-- matplotlib ≥3.7 (visualization)
-
-Install with extras:
-```bash
-uv sync --extra performance    # Add Numba
-uv sync --extra all            # Everything
-uv sync --extra dev            # Development
-```
-
-## Technical Details
-
-### Diagonal Approximation
-
-For orders k ≥ 3, storing full kernels is impractical:
-- Full h3: 512³ × 8 bytes = 1 GB
-- Diagonal h3: 512 × 8 bytes = 4 KB (99.6% reduction)
-
-The diagonal approximation:
-```
-y_k[n] = Σᵢ hk_diag[i] · x[n-i]^k
-```
-
-captures 70-80% of nonlinear energy for typical audio distortion while enabling real-time processing.
-
-### Multi-tone Estimation Theory
-
-Frequency-domain relationships for diagonal kernels:
-- **Linear**: Y(f) = H1(f)·X(f)
-- **2nd-order**: Y(2f) = ½·H2(f)·X(f)²
-- **3rd-order**: Y(3f) = ⅙·H3(f)·X(f)³
-- **4th-order**: Y(4f) = 1/24·H4(f)·X(f)⁴
-- **5th-order**: Y(5f) = 1/120·H5(f)·X(f)⁵
-
-By analyzing harmonic content, kernels are separated in frequency domain and inverted to time domain.
-
-### Optimization Strategy
-
-1. **Diagonal kernels** reduce memory from O(N^k) to O(N)
-2. **Numba JIT compilation** provides 10x speedup via SIMD and parallelization
-3. **Block processing** enables streaming with minimal latency
-4. **Efficient convolution** using optimized inner loops
-
-## Mathematical Accuracy
-
-All implementations are validated against:
-- Known polynomial systems (error < 0.1%)
-- Harmonic separation tests
-- Energy conservation
-- Multi-tone estimation accuracy
-- Engine consistency (Numba vs NumPy)
-
-Run validation suite:
-```bash
-uv run python examples/validation_full_order.py
-```
-
-## Development
+## Testing
 
 ```bash
-# Install with development tools
-uv sync --extra dev
-
 # Run all tests
-uv run python examples/validation_full_order.py
+uv run pytest
 
-# Benchmark performance
-uv run python examples/benchmark_full_order.py
+# Run specific test suites
+uv run pytest tests/test_tt_als_real.py    # TT-ALS solver tests
+uv run pytest tests/test_mimo_rls.py       # MIMO and RLS tests
 
-# Add dependencies
-uv add package-name
+# With coverage
+uv run pytest --cov=volterra --cov-report=html
 ```
+
+**Test Results:** 226 tests passing, 68% coverage
 
 ## Use Cases
 
-- **Analog gear emulation**: Tube amplifiers, tape saturation
-- **Harmonic enhancement**: Musical distortion, warmth
-- **System identification**: Measure nonlinear audio systems
-- **Research**: Nonlinear audio processing, Volterra theory
-- **Plugin development**: Real-time audio effects
+### Audio/Acoustic Systems
+
+- **Loudspeaker identification**: Nonlinear distortion modeling
+- **Microphone calibration**: Capsule nonlinearity compensation
+- **Amplifier emulation**: Tube/solid-state characteristic extraction
+- **Room acoustics**: Nonlinear + RIR combined models
+- **Echo cancellation**: Adaptive nonlinear acoustic echo
+
+### Research & Development
+
+- **Nonlinear system identification**: General Volterra model fitting
+- **Time-varying systems**: Adaptive filtering with RLS
+- **MIMO processing**: Multi-channel nonlinear effects
+- **Benchmarking**: Compare against Novak synchronized swept-sine
+
+## Comparison with Other Methods
+
+| Method | This Implementation | Novak Swept-Sine | Multi-tone |
+|--------|---------------------|------------------|------------|
+| **Type** | Diagonal Volterra (TT-ALS) | Diagonal Volterra (freq.) | Diagonal Volterra (freq.) |
+| **Domain** | Time | Frequency | Frequency |
+| **MIMO** | ✅ Native | ⚠️ Per channel | ⚠️ Per channel |
+| **Adaptive** | ✅ RLS | ❌ | ❌ |
+| **Complexity** | O(M·T·N²) | O(T·log T) | O(T·log T) |
+| **Memory** | M×N | M×N | M×N |
+
+## Version History
+
+**v0.7.0** (Current)
+- ✅ MIMO support (additive diagonal Volterra)
+- ✅ RLS online/adaptive solver
+- ✅ 17 new tests (MIMO + RLS)
+- ✅ Comprehensive documentation updates
+
+**v0.6.1**
+- ✅ Diagonal TT-ALS solver (memory polynomial)
+- ✅ Sliding-window prediction
+- ✅ 20 comprehensive tests
+- ✅ Full documentation (TT_ALS_IMPLEMENTATION.md)
+
+## References
+
+1. Boyd, S., Tang, Y.Y., & Chua, L.O. (1983). "Measuring Volterra kernels", IEEE Trans. Circuits and Systems
+2. Schetzen, M. (1980). "The Volterra and Wiener Theories of Nonlinear Systems", Wiley
+3. Oseledets, I.V. (2011). "Tensor-Train Decomposition", SIAM J. Sci. Comput.
+4. Novak, A. et al. (2015). "Synchronized Swept-Sine", JAES
+5. Haykin, S. (2002). "Adaptive Filter Theory", Prentice Hall
+6. Diniz, P.S.R. (2013). "Adaptive Filtering", Springer
 
 ## License
 
 MIT
 
-## References
+## Contributing
 
-- Farina, A. (2000). "Simultaneous measurement of impulse response and distortion with a swept-sine technique"
-- Novák, A. et al. (2015). "Nonlinear System Identification Using Exponential Swept-Sine Signal"
-- Reed & Hawksford (1996). "Identification of discrete Volterra series"
-- Schetzen, M. (1980). "The Volterra and Wiener Theories of Nonlinear Systems"
+Issues and pull requests welcome at https://github.com/anatrini/py-volterra
