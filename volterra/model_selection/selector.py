@@ -5,13 +5,14 @@ Selects between Diagonal Memory Polynomial, Generalized Memory Polynomial,
 and full TT-Volterra based on validation performance and information criteria.
 """
 
-from dataclasses import dataclass, field
-from typing import Optional, Dict, Any, Tuple
+from dataclasses import dataclass
+from typing import Any
+
 import numpy as np
 
 from volterra.models.gmp import GeneralizedMemoryPolynomial, GMPConfig
-from volterra.models.tt_volterra_full import TTVolterraMIMO, TTVolterraFullConfig
-from volterra.utils.shapes import validate_mimo_data, canonicalize_input, canonicalize_output
+from volterra.models.tt_volterra_full import TTVolterraFullConfig, TTVolterraMIMO
+from volterra.utils.shapes import canonicalize_input, canonicalize_output, validate_mimo_data
 
 
 @dataclass
@@ -33,10 +34,11 @@ class ModelSelectionConfig:
         tt_ranks: TT ranks for full TT-Volterra (None = auto).
         verbose: Print fitting progress.
     """
+
     memory_length: int = 5
     order: int = 3
     validation_split: float = 0.2
-    selection_criterion: str = 'bic'
+    selection_criterion: str = "bic"
     prefer_simpler: bool = True
     simplicity_threshold: float = 0.02
     try_diagonal: bool = True
@@ -44,7 +46,7 @@ class ModelSelectionConfig:
     try_tt_full: bool = False
     gmp_max_cross_lag: int = 2
     gmp_max_cross_order: int = 2
-    tt_ranks: Optional[list] = None
+    tt_ranks: list | None = None
     verbose: bool = False
 
     def __post_init__(self):
@@ -55,7 +57,7 @@ class ModelSelectionConfig:
             raise ValueError("order must be at least 1")
         if not (0 < self.validation_split < 1):
             raise ValueError("validation_split must be in (0, 1)")
-        if self.selection_criterion not in ['aic', 'bic', 'nmse']:
+        if self.selection_criterion not in ["aic", "bic", "nmse"]:
             raise ValueError("selection_criterion must be 'aic', 'bic', or 'nmse'")
         if not (self.try_diagonal or self.try_gmp or self.try_tt_full):
             raise ValueError("At least one model type must be enabled")
@@ -102,11 +104,7 @@ class ModelSelector:
         >>> print(f"Selected: {selector.selected_model_type}")
     """
 
-    def __init__(
-        self,
-        config: Optional[ModelSelectionConfig] = None,
-        **kwargs
-    ):
+    def __init__(self, config: ModelSelectionConfig | None = None, **kwargs):
         """Initialize ModelSelector.
 
         Args:
@@ -119,11 +117,11 @@ class ModelSelector:
             raise ValueError("Cannot specify both config and kwargs")
 
         self.config = config
-        self._selected_model: Optional[Any] = None
-        self._selected_type: Optional[str] = None
-        self._all_results: Optional[Dict[str, Dict]] = None
-        self._n_inputs: Optional[int] = None
-        self._n_outputs: Optional[int] = None
+        self._selected_model: Any | None = None
+        self._selected_type: str | None = None
+        self._all_results: dict[str, dict] | None = None
+        self._n_inputs: int | None = None
+        self._n_outputs: int | None = None
 
     @property
     def is_fitted(self) -> bool:
@@ -138,10 +136,8 @@ class ModelSelector:
         return self._selected_type
 
     def _split_train_val(
-        self,
-        x: np.ndarray,
-        y: np.ndarray
-    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+        self, x: np.ndarray, y: np.ndarray
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
         """Split data into train and validation sets.
 
         Args:
@@ -222,22 +218,18 @@ class ModelSelector:
         Returns:
             Number of parameters.
         """
-        if model_type in ['Diagonal-MP', 'GMP']:
+        if model_type in ["Diagonal-MP", "GMP"]:
             # GMP stores coefficients per output
             return model.total_terms * model.n_inputs * model.n_outputs
-        elif model_type == 'TT-Full':
+        elif model_type == "TT-Full":
             # TTVolterraMIMO has total_parameters property
             return model.total_parameters
         else:
             return 0
 
     def _try_diagonal_mp(
-        self,
-        x_train: np.ndarray,
-        y_train: np.ndarray,
-        x_val: np.ndarray,
-        y_val: np.ndarray
-    ) -> Dict[str, Any]:
+        self, x_train: np.ndarray, y_train: np.ndarray, x_val: np.ndarray, y_val: np.ndarray
+    ) -> dict[str, Any]:
         """Try diagonal Memory Polynomial.
 
         Args:
@@ -252,14 +244,10 @@ class ModelSelector:
 
         # Create diagonal-only GMP (equivalent to MP)
         gmp_config = GMPConfig(
-            max_cross_lag_distance=0,  # Diagonal only
-            regularization=1e-8,
-            verbose=False
+            max_cross_lag_distance=0, regularization=1e-8, verbose=False  # Diagonal only
         )
         model = GeneralizedMemoryPolynomial(
-            memory_length=self.config.memory_length,
-            order=self.config.order,
-            config=gmp_config
+            memory_length=self.config.memory_length, order=self.config.order, config=gmp_config
         )
 
         # Fit
@@ -270,7 +258,7 @@ class ModelSelector:
 
         # Compute metrics
         nmse = self._compute_nmse(y_val, y_val_pred)
-        n_params = self._count_parameters(model, 'Diagonal-MP')
+        n_params = self._count_parameters(model, "Diagonal-MP")
         aic = self._compute_aic(nmse, len(y_val), n_params)
         bic = self._compute_bic(nmse, len(y_val), n_params)
 
@@ -278,21 +266,17 @@ class ModelSelector:
             print(f"  NMSE: {nmse:.6e}, AIC: {aic:.2f}, BIC: {bic:.2f}, Params: {n_params}")
 
         return {
-            'model': model,
-            'nmse': nmse,
-            'aic': aic,
-            'bic': bic,
-            'n_params': n_params,
-            'y_val_pred': y_val_pred
+            "model": model,
+            "nmse": nmse,
+            "aic": aic,
+            "bic": bic,
+            "n_params": n_params,
+            "y_val_pred": y_val_pred,
         }
 
     def _try_gmp(
-        self,
-        x_train: np.ndarray,
-        y_train: np.ndarray,
-        x_val: np.ndarray,
-        y_val: np.ndarray
-    ) -> Dict[str, Any]:
+        self, x_train: np.ndarray, y_train: np.ndarray, x_val: np.ndarray, y_val: np.ndarray
+    ) -> dict[str, Any]:
         """Try Generalized Memory Polynomial.
 
         Args:
@@ -309,12 +293,10 @@ class ModelSelector:
             max_cross_lag_distance=self.config.gmp_max_cross_lag,
             max_cross_order=self.config.gmp_max_cross_order,
             regularization=1e-8,
-            verbose=False
+            verbose=False,
         )
         model = GeneralizedMemoryPolynomial(
-            memory_length=self.config.memory_length,
-            order=self.config.order,
-            config=gmp_config
+            memory_length=self.config.memory_length, order=self.config.order, config=gmp_config
         )
 
         # Fit
@@ -325,7 +307,7 @@ class ModelSelector:
 
         # Compute metrics
         nmse = self._compute_nmse(y_val, y_val_pred)
-        n_params = self._count_parameters(model, 'GMP')
+        n_params = self._count_parameters(model, "GMP")
         aic = self._compute_aic(nmse, len(y_val), n_params)
         bic = self._compute_bic(nmse, len(y_val), n_params)
 
@@ -333,21 +315,17 @@ class ModelSelector:
             print(f"  NMSE: {nmse:.6e}, AIC: {aic:.2f}, BIC: {bic:.2f}, Params: {n_params}")
 
         return {
-            'model': model,
-            'nmse': nmse,
-            'aic': aic,
-            'bic': bic,
-            'n_params': n_params,
-            'y_val_pred': y_val_pred
+            "model": model,
+            "nmse": nmse,
+            "aic": aic,
+            "bic": bic,
+            "n_params": n_params,
+            "y_val_pred": y_val_pred,
         }
 
     def _try_tt_full(
-        self,
-        x_train: np.ndarray,
-        y_train: np.ndarray,
-        x_val: np.ndarray,
-        y_val: np.ndarray
-    ) -> Dict[str, Any]:
+        self, x_train: np.ndarray, y_train: np.ndarray, x_val: np.ndarray, y_val: np.ndarray
+    ) -> dict[str, Any]:
         """Try full TT-Volterra.
 
         Args:
@@ -367,17 +345,12 @@ class ModelSelector:
         else:
             ranks = self.config.tt_ranks
 
-        tt_config = TTVolterraFullConfig(
-            max_iter=50,
-            tol=1e-6,
-            regularization=1e-6,
-            verbose=False
-        )
+        tt_config = TTVolterraFullConfig(max_iter=50, tol=1e-6, regularization=1e-6, verbose=False)
         model = TTVolterraMIMO(
             memory_length=self.config.memory_length,
             order=self.config.order,
             ranks=ranks,
-            config=tt_config
+            config=tt_config,
         )
 
         # Fit
@@ -388,7 +361,7 @@ class ModelSelector:
 
         # Compute metrics
         nmse = self._compute_nmse(y_val, y_val_pred)
-        n_params = self._count_parameters(model, 'TT-Full')
+        n_params = self._count_parameters(model, "TT-Full")
         aic = self._compute_aic(nmse, len(y_val), n_params)
         bic = self._compute_bic(nmse, len(y_val), n_params)
 
@@ -396,21 +369,21 @@ class ModelSelector:
             print(f"  NMSE: {nmse:.6e}, AIC: {aic:.2f}, BIC: {bic:.2f}, Params: {n_params}")
 
         return {
-            'model': model,
-            'nmse': nmse,
-            'aic': aic,
-            'bic': bic,
-            'n_params': n_params,
-            'y_val_pred': y_val_pred
+            "model": model,
+            "nmse": nmse,
+            "aic": aic,
+            "bic": bic,
+            "n_params": n_params,
+            "y_val_pred": y_val_pred,
         }
 
     def fit(
         self,
         x: np.ndarray,
         y: np.ndarray,
-        x_val: Optional[np.ndarray] = None,
-        y_val: Optional[np.ndarray] = None
-    ) -> 'ModelSelector':
+        x_val: np.ndarray | None = None,
+        y_val: np.ndarray | None = None,
+    ) -> "ModelSelector":
         """Fit multiple models and select the best.
 
         Args:
@@ -434,7 +407,7 @@ class ModelSelector:
         if x_val is None or y_val is None:
             x_train, y_train, x_val, y_val = self._split_train_val(
                 x_canon if self._n_inputs > 1 else x_canon[:, 0],
-                y_canon if self._n_outputs > 1 else y_canon[:, 0]
+                y_canon if self._n_outputs > 1 else y_canon[:, 0],
             )
         else:
             x_train = x_canon if self._n_inputs > 1 else x_canon[:, 0]
@@ -449,18 +422,18 @@ class ModelSelector:
         results = {}
 
         if self.config.try_diagonal:
-            results['Diagonal-MP'] = self._try_diagonal_mp(x_train, y_train, x_val, y_val)
+            results["Diagonal-MP"] = self._try_diagonal_mp(x_train, y_train, x_val, y_val)
 
         if self.config.try_gmp:
-            results['GMP'] = self._try_gmp(x_train, y_train, x_val, y_val)
+            results["GMP"] = self._try_gmp(x_train, y_train, x_val, y_val)
 
         if self.config.try_tt_full:
-            results['TT-Full'] = self._try_tt_full(x_train, y_train, x_val, y_val)
+            results["TT-Full"] = self._try_tt_full(x_train, y_train, x_val, y_val)
 
         # Select best model
         criterion_key = self.config.selection_criterion
-        if criterion_key == 'nmse':
-            criterion_key = 'nmse'
+        if criterion_key == "nmse":
+            criterion_key = "nmse"
         else:
             criterion_key = self.config.selection_criterion  # 'aic' or 'bic'
 
@@ -469,7 +442,7 @@ class ModelSelector:
         best_criterion = np.inf
 
         # Model complexity order (for tie-breaking with prefer_simpler)
-        complexity_order = ['Diagonal-MP', 'GMP', 'TT-Full']
+        complexity_order = ["Diagonal-MP", "GMP", "TT-Full"]
 
         for model_type in complexity_order:
             if model_type not in results:
@@ -479,7 +452,9 @@ class ModelSelector:
 
             if self.config.prefer_simpler and best_model_type is not None:
                 # If new model is more complex but criterion is comparable, keep simpler
-                relative_improvement = (best_criterion - criterion_value) / abs(best_criterion + 1e-12)
+                relative_improvement = (best_criterion - criterion_value) / abs(
+                    best_criterion + 1e-12
+                )
                 if relative_improvement < self.config.simplicity_threshold:
                     # Not enough improvement to justify complexity
                     continue
@@ -490,7 +465,7 @@ class ModelSelector:
 
         # Store results
         self._selected_type = best_model_type
-        self._selected_model = results[best_model_type]['model']
+        self._selected_model = results[best_model_type]["model"]
         self._all_results = results
 
         if self.config.verbose:
@@ -529,7 +504,7 @@ class ModelSelector:
 
         return self._selected_model
 
-    def get_all_results(self) -> Dict[str, Dict[str, Any]]:
+    def get_all_results(self) -> dict[str, dict[str, Any]]:
         """Get metrics for all tried models.
 
         Returns:
@@ -545,10 +520,10 @@ class ModelSelector:
         results_clean = {}
         for model_type, result in self._all_results.items():
             results_clean[model_type] = {
-                'nmse': result['nmse'],
-                'aic': result['aic'],
-                'bic': result['bic'],
-                'n_params': result['n_params'],
+                "nmse": result["nmse"],
+                "aic": result["aic"],
+                "bic": result["bic"],
+                "n_params": result["n_params"],
             }
 
         return results_clean
@@ -579,7 +554,7 @@ class ModelSelector:
         lines.append(f"{'Model':<20} {'NMSE':>12} {'AIC':>12} {'BIC':>12} {'Params':>10}")
         lines.append("-" * 70)
 
-        for model_type in ['Diagonal-MP', 'GMP', 'TT-Full']:
+        for model_type in ["Diagonal-MP", "GMP", "TT-Full"]:
             if model_type not in self._all_results:
                 continue
 

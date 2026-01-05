@@ -28,23 +28,19 @@ References:
 - Holtz et al. (2012), "The alternating linear scheme for tensor optimization"
 """
 
-import numpy as np
-from typing import List, Tuple, Optional
-from scipy import linalg
 import warnings
 
+import numpy as np
+from scipy import linalg
+
 from volterra.tt.tt_cores import (
-    validate_tt_cores_structure,
     left_orthogonalize_cores,
     right_orthogonalize_cores,
-    estimate_condition_number,
+    validate_tt_cores_structure,
 )
 
 
-def build_mimo_delay_matrix(
-    x: np.ndarray,
-    memory_length: int
-) -> np.ndarray:
+def build_mimo_delay_matrix(x: np.ndarray, memory_length: int) -> np.ndarray:
     """
     Build MIMO delay matrix with Kronecker product structure.
 
@@ -91,19 +87,19 @@ def build_mimo_delay_matrix(
             # Column index for input i, delay tau
             col_idx = i * N + tau
             # Extract delayed samples: x_i[t-tau] for t in [N-1, T-1]
-            X_delay[:, col_idx] = x[N-1-tau:T-tau, i]
+            X_delay[:, col_idx] = x[N - 1 - tau : T - tau, i]
 
     return X_delay
 
 
 def build_tt_design_matrix(
     X_delay: np.ndarray,
-    core_idx: int,
-    order: int,
-    left_cores: Optional[List[np.ndarray]] = None,
-    right_cores: Optional[List[np.ndarray]] = None,
-    left_contractions: Optional[np.ndarray] = None,
-    right_contractions: Optional[np.ndarray] = None
+    _core_idx: int,
+    _order: int,
+    left_cores: list[np.ndarray] | None = None,
+    right_cores: list[np.ndarray] | None = None,
+    left_contractions: np.ndarray | None = None,
+    right_contractions: np.ndarray | None = None,
 ) -> np.ndarray:
     """
     Build design matrix for optimizing a specific TT core.
@@ -121,10 +117,10 @@ def build_tt_design_matrix(
     X_delay : np.ndarray
         MIMO delay matrix, shape (T_valid, mode_size)
         mode_size = N for SISO, I*N for MIMO
-    core_idx : int
-        Index of core being optimized (0 to M-1)
-    order : int
-        Volterra order M (number of cores)
+    _core_idx : int
+        Index of core being optimized (0 to M-1) - reserved for future validation
+    _order : int
+        Volterra order M (number of cores) - reserved for future validation
     left_cores : List[np.ndarray], optional
         Cores 0 to k-1 (left-orthogonalized)
     right_cores : List[np.ndarray], optional
@@ -147,8 +143,6 @@ def build_tt_design_matrix(
     For the first sweep (no orthogonalized cores), we use simpler construction.
     """
     T_valid, mode_size = X_delay.shape
-    k = core_idx
-    M = order
 
     # Compute left contractions if not provided
     if left_contractions is None:
@@ -227,10 +221,10 @@ def build_tt_design_matrix(
 def solve_core_regularized_lstsq(
     Phi: np.ndarray,
     y: np.ndarray,
-    core_shape: Tuple[int, int, int],
+    core_shape: tuple[int, int, int],
     regularization: float = 1e-8,
-    check_condition: bool = True
-) -> Tuple[np.ndarray, dict]:
+    check_condition: bool = True,
+) -> tuple[np.ndarray, dict]:
     """
     Solve regularized least squares for a TT core.
 
@@ -285,7 +279,8 @@ def solve_core_regularized_lstsq(
                 warnings.warn(
                     f"High condition number {cond:.2e} detected. "
                     "Consider increasing regularization.",
-                    UserWarning
+                    UserWarning,
+                    stacklevel=2,
                 )
         except np.linalg.LinAlgError:
             cond = np.inf
@@ -294,11 +289,10 @@ def solve_core_regularized_lstsq(
 
     # Solve
     try:
-        core_vec = linalg.solve(A, b, assume_a='pos')
+        core_vec = linalg.solve(A, b, assume_a="pos")
     except linalg.LinAlgError as e:
         warnings.warn(
-            f"Least squares failed: {e}. Falling back to lstsq.",
-            UserWarning
+            f"Least squares failed: {e}. Falling back to lstsq.", UserWarning, stacklevel=2
         )
         core_vec, _, _, _ = linalg.lstsq(Phi, y)
 
@@ -310,17 +304,14 @@ def solve_core_regularized_lstsq(
     core = core_vec.reshape(core_shape)
 
     info = {
-        'condition': cond,
-        'residual_norm': residual_norm,
+        "condition": cond,
+        "residual_norm": residual_norm,
     }
 
     return core, info
 
 
-def evaluate_tt_volterra_mimo(
-    cores: List[np.ndarray],
-    X_delay: np.ndarray
-) -> np.ndarray:
+def evaluate_tt_volterra_mimo(cores: list[np.ndarray], X_delay: np.ndarray) -> np.ndarray:
     """
     Evaluate TT-Volterra model on MIMO delay matrix.
 
@@ -396,13 +387,13 @@ def tt_als_full_mimo(
     y: np.ndarray,
     memory_length: int,
     order: int,
-    ranks: List[int],
+    ranks: list[int],
     max_iter: int = 100,
     tol: float = 1e-6,
     regularization: float = 1e-8,
     verbose: bool = False,
-    check_monotonic: bool = True
-) -> Tuple[List[np.ndarray], dict]:
+    check_monotonic: bool = True,
+) -> tuple[list[np.ndarray], dict]:
     """
     Full TT-ALS for general MIMO Volterra identification.
 
@@ -499,7 +490,7 @@ def tt_als_full_mimo(
 
     # Trim y to match
     if len(y) > T_valid:
-        y_valid = y[N-1:N-1+T_valid]
+        y_valid = y[N - 1 : N - 1 + T_valid]
     else:
         y_valid = y[:T_valid]
 
@@ -535,21 +526,22 @@ def tt_als_full_mimo(
 
             # Build design matrix for core k
             left_cores = cores[:k] if k > 0 else None
-            right_cores = cores[k+1:] if k < M - 1 else None
+            right_cores = cores[k + 1 :] if k < M - 1 else None
 
-            Phi = build_tt_design_matrix(
-                X_delay, k, M, left_cores, right_cores
-            )
+            Phi = build_tt_design_matrix(X_delay, k, M, left_cores, right_cores)
 
             # Solve for core k
             core_shape = cores[k].shape
             cores[k], solve_info = solve_core_regularized_lstsq(
-                Phi, y_valid, core_shape, regularization,
-                check_condition=(iteration == 0)  # Only check first iteration
+                Phi,
+                y_valid,
+                core_shape,
+                regularization,
+                check_condition=(iteration == 0),  # Only check first iteration
             )
 
-            if solve_info['condition'] is not None:
-                condition_history.append(solve_info['condition'])
+            if solve_info["condition"] is not None:
+                condition_history.append(solve_info["condition"])
 
         # Compute loss
         y_pred = evaluate_tt_volterra_mimo(cores, X_delay)
@@ -560,7 +552,8 @@ def tt_als_full_mimo(
             warnings.warn(
                 f"Loss increased: {prev_loss:.6e} → {loss:.6e} at iteration {iteration+1}. "
                 "This may indicate numerical issues.",
-                UserWarning
+                UserWarning,
+                stacklevel=2,
             )
 
         loss_history.append(loss)
@@ -586,13 +579,13 @@ def tt_als_full_mimo(
         print(f"Max iterations ({max_iter}) reached without convergence")
 
     info = {
-        'loss_history': loss_history,
-        'iterations': len(loss_history),
-        'converged': converged,
-        'final_loss': loss_history[-1] if loss_history else np.inf,
-        'condition_history': condition_history,
-        'mimo': I > 1,
-        'mode_size': mode_size,
+        "loss_history": loss_history,
+        "iterations": len(loss_history),
+        "converged": converged,
+        "final_loss": loss_history[-1] if loss_history else np.inf,
+        "condition_history": condition_history,
+        "mimo": I > 1,
+        "mode_size": mode_size,
     }
 
     return cores, info

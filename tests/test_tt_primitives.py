@@ -10,19 +10,18 @@ These tests verify:
 Critical for STEP 3: TT Primitives Implementation
 """
 
-import pytest
 import numpy as np
-from numpy.testing import assert_allclose, assert_array_equal
+import pytest
+from numpy.testing import assert_allclose
 
 from volterra.tt import (
-    TTTensor,
-    validate_tt_cores,
-    tt_matvec,
-    tt_to_full,
-    tt_als,
-    tt_mals,
     TTALSConfig,
     TTMALSConfig,
+    TTTensor,
+    tt_als,
+    tt_mals,
+    tt_matvec,
+    tt_to_full,
 )
 
 
@@ -235,7 +234,7 @@ class TestTTToFull:
 
         # Full tensor contraction
         A = tt_to_full(cores)  # (N, N)
-        y_full = np.einsum('ij,i,j->', A, x, x)  # sum_ij A[i,j] * x[i] * x[j]
+        y_full = np.einsum("ij,i,j->", A, x, x)  # sum_ij A[i,j] * x[i] * x[j]
 
         assert_allclose(y_tt, y_full, rtol=1e-10)
 
@@ -260,37 +259,21 @@ class TestTTALS:
         x = np.random.randn(100)
         y = np.random.randn(100)
 
-        cores, info = tt_als(
-            x, y,
-            memory_length=5,
-            order=2,
-            ranks=[1, 2, 1]
-        )
+        cores, info = tt_als(x, y, memory_length=5, order=2, ranks=[1, 2, 1])
 
         assert len(cores) == 2  # order=2
         assert cores[0].shape[1] == 5  # memory_length=5
-        assert 'loss_history' in info
-        assert 'converged' in info
+        assert "loss_history" in info
+        assert "converged" in info
 
     def test_tt_als_with_config(self):
         """TT-ALS should accept config."""
         x = np.random.randn(100)
         y = np.random.randn(100)
 
-        config = TTALSConfig(
-            max_iter=10,
-            tol=1e-4,
-            verbose=False,
-            init_method='zeros'
-        )
+        config = TTALSConfig(max_iter=10, tol=1e-4, verbose=False, init_method="zeros")
 
-        cores, info = tt_als(
-            x, y,
-            memory_length=5,
-            order=2,
-            ranks=[1, 2, 1],
-            config=config
-        )
+        cores, info = tt_als(x, y, memory_length=5, order=2, ranks=[1, 2, 1], config=config)
 
         assert len(cores) == 2
 
@@ -339,16 +322,11 @@ class TestTTMALS:
         x = np.random.randn(100)
         y = np.random.randn(100)
 
-        cores, info = tt_mals(
-            x, y,
-            memory_length=5,
-            order=2,
-            initial_ranks=[1, 2, 1]
-        )
+        cores, info = tt_mals(x, y, memory_length=5, order=2, initial_ranks=[1, 2, 1])
 
         assert len(cores) == 2
-        assert 'final_ranks' in info
-        assert 'rank_adaptation_steps' in info
+        assert "final_ranks" in info
+        assert "rank_adaptation_steps" in info
 
     def test_tt_mals_with_config(self):
         """TT-MALS should accept config with rank adaptation params."""
@@ -356,23 +334,15 @@ class TestTTMALS:
         y = np.random.randn(100)
 
         config = TTMALSConfig(
-            max_iter=10,
-            rank_adaptation=True,
-            max_rank=5,
-            rank_tol=1e-3,
-            adapt_every=3
+            max_iter=10, rank_adaptation=True, max_rank=5, rank_tol=1e-3, adapt_every=3
         )
 
         cores, info = tt_mals(
-            x, y,
-            memory_length=5,
-            order=2,
-            initial_ranks=[1, 2, 1],
-            config=config
+            x, y, memory_length=5, order=2, initial_ranks=[1, 2, 1], config=config
         )
 
         assert len(cores) == 2
-        assert info['initial_ranks'] == [1, 2, 1]
+        assert info["initial_ranks"] == [1, 2, 1]
 
 
 class TestTTEdgeCases:

@@ -10,12 +10,11 @@ These tests verify correctness against known analytical cases:
 Critical for STEP 6: Analytical Validation
 """
 
-import pytest
 import numpy as np
 from numpy.testing import assert_allclose
 
+from volterra.models import TTVolterraConfig, TTVolterraIdentifier
 from volterra.tt import TTTensor, tt_matvec, tt_to_full
-from volterra.models import TTVolterraIdentifier, TTVolterraConfig
 
 
 class TestAnalyticalPolynomials:
@@ -36,7 +35,7 @@ class TestAnalyticalPolynomials:
             memory_length=1,
             order=2,
             ranks=[1, 2, 1],
-            config=TTVolterraConfig(max_iter=1, verbose=False)
+            config=TTVolterraConfig(max_iter=1, verbose=False),
         )
         identifier.fit(x, y)
 
@@ -60,7 +59,7 @@ class TestAnalyticalPolynomials:
             memory_length=1,
             order=1,
             ranks=[1, 1],  # M=1 requires 2 ranks
-            config=TTVolterraConfig(max_iter=1)
+            config=TTVolterraConfig(max_iter=1),
         )
         identifier.fit(x, y)
 
@@ -79,7 +78,7 @@ class TestAnalyticalPolynomials:
             a.reshape(1, N, 1),
             b.reshape(1, N, 1),
         ]
-        tt = TTTensor(cores)
+        TTTensor(cores)
 
         # Full tensor should be outer product
         A_full = tt_to_full(cores)
@@ -102,7 +101,7 @@ class TestAnalyticalPolynomials:
 
         # Full contraction
         A = tt_to_full(cores)
-        y_full = np.einsum('ij,i,j->', A, x, x)
+        y_full = np.einsum("ij,i,j->", A, x, x)
 
         assert_allclose(y_tt, y_full, rtol=1e-10)
 
@@ -116,11 +115,7 @@ class TestEdgeCases:
         x = np.random.randn(100)
         y = x + 0.1 * x**2
 
-        identifier = TTVolterraIdentifier(
-            memory_length=1,
-            order=2,
-            ranks=[1, 2, 1]
-        )
+        identifier = TTVolterraIdentifier(memory_length=1, order=2, ranks=[1, 2, 1])
         identifier.fit(x, y)
 
         assert identifier.is_fitted
@@ -132,11 +127,7 @@ class TestEdgeCases:
         x = np.random.randn(100)
         y = 2.0 * x
 
-        identifier = TTVolterraIdentifier(
-            memory_length=5,
-            order=1,
-            ranks=[1, 1]
-        )
+        identifier = TTVolterraIdentifier(memory_length=5, order=1, ranks=[1, 1])
         identifier.fit(x, y)
 
         assert identifier.is_fitted
@@ -161,11 +152,7 @@ class TestEdgeCases:
 
     def test_very_high_order(self):
         """High order M=5 should initialize correctly."""
-        identifier = TTVolterraIdentifier(
-            memory_length=3,
-            order=5,
-            ranks=[1, 2, 2, 2, 2, 1]
-        )
+        identifier = TTVolterraIdentifier(memory_length=3, order=5, ranks=[1, 2, 2, 2, 2, 1])
 
         assert identifier.order == 5
         assert len(identifier.ranks) == 6  # M+1 ranks
@@ -175,11 +162,7 @@ class TestEdgeCases:
         x = np.array([1.0, 2.0, 3.0])
         y = np.array([2.0, 4.0, 6.0])
 
-        identifier = TTVolterraIdentifier(
-            memory_length=1,
-            order=1,
-            ranks=[1, 1]
-        )
+        identifier = TTVolterraIdentifier(memory_length=1, order=1, ranks=[1, 1])
         identifier.fit(x, y)
 
         assert identifier.is_fitted
@@ -195,16 +178,10 @@ class TestDiagonalOnlyMode:
 
     def test_diagonal_mode_initialization(self):
         """Initialize with diagonal_only=True."""
-        config = TTVolterraConfig(
-            diagonal_only=True,
-            solver='als'
-        )
+        config = TTVolterraConfig(diagonal_only=True, solver="als")
 
         identifier = TTVolterraIdentifier(
-            memory_length=10,
-            order=3,
-            ranks=[1, 2, 2, 1],
-            config=config
+            memory_length=10, order=3, ranks=[1, 2, 2, 1], config=config
         )
 
         assert identifier.config.diagonal_only
@@ -217,19 +194,13 @@ class TestDiagonalOnlyMode:
 
         # General mode
         id_general = TTVolterraIdentifier(
-            memory_length=5,
-            order=2,
-            ranks=[1, 3, 1],
-            config=TTVolterraConfig(diagonal_only=False)
+            memory_length=5, order=2, ranks=[1, 3, 1], config=TTVolterraConfig(diagonal_only=False)
         )
         id_general.fit(x, y)
 
         # Diagonal mode
         id_diagonal = TTVolterraIdentifier(
-            memory_length=5,
-            order=2,
-            ranks=[1, 3, 1],
-            config=TTVolterraConfig(diagonal_only=True)
+            memory_length=5, order=2, ranks=[1, 3, 1], config=TTVolterraConfig(diagonal_only=True)
         )
         id_diagonal.fit(x, y)
 
@@ -245,16 +216,9 @@ class TestMIMOComprehensive:
         """SIMO: Single input → 2 outputs."""
         np.random.seed(42)
         x = np.random.randn(100)  # (T,)
-        y = np.column_stack([
-            x + 0.1 * x**2,
-            x - 0.1 * x**2
-        ])  # (T, 2)
+        y = np.column_stack([x + 0.1 * x**2, x - 0.1 * x**2])  # (T, 2)
 
-        identifier = TTVolterraIdentifier(
-            memory_length=5,
-            order=2,
-            ranks=[1, 2, 1]
-        )
+        identifier = TTVolterraIdentifier(memory_length=5, order=2, ranks=[1, 2, 1])
         identifier.fit(x, y)
 
         assert identifier.n_inputs_ == 1
@@ -265,13 +229,9 @@ class TestMIMOComprehensive:
         """MISO: 3 inputs → single output."""
         np.random.seed(42)
         x = np.random.randn(100, 3)  # (T, 3)
-        y = x[:, 0] + 0.1 * x[:, 1]**2  # (T,)
+        y = x[:, 0] + 0.1 * x[:, 1] ** 2  # (T,)
 
-        identifier = TTVolterraIdentifier(
-            memory_length=5,
-            order=2,
-            ranks=[1, 2, 1]
-        )
+        identifier = TTVolterraIdentifier(memory_length=5, order=2, ranks=[1, 2, 1])
         identifier.fit(x, y)
 
         assert identifier.n_inputs_ == 3
@@ -283,11 +243,7 @@ class TestMIMOComprehensive:
         x = np.random.randn(100, 2)  # (T, 2)
         y = np.random.randn(100, 3)  # (T, 3)
 
-        identifier = TTVolterraIdentifier(
-            memory_length=5,
-            order=2,
-            ranks=[1, 2, 1]
-        )
+        identifier = TTVolterraIdentifier(memory_length=5, order=2, ranks=[1, 2, 1])
         identifier.fit(x, y)
 
         assert identifier.n_inputs_ == 2
@@ -305,11 +261,7 @@ class TestMIMOComprehensive:
         x_train = np.random.randn(100, 2)
         y_train = np.random.randn(100, 3)
 
-        identifier = TTVolterraIdentifier(
-            memory_length=5,
-            order=2,
-            ranks=[1, 2, 1]
-        )
+        identifier = TTVolterraIdentifier(memory_length=5, order=2, ranks=[1, 2, 1])
         identifier.fit(x_train, y_train)
 
         # Predict on new data
@@ -326,17 +278,12 @@ class TestRankAdaptation:
 
     def test_mals_solver_selection(self):
         """MALS solver should be selectable."""
-        config = TTVolterraConfig(solver='mals')
-        assert config.solver == 'mals'
+        config = TTVolterraConfig(solver="mals")
+        assert config.solver == "mals"
 
     def test_rank_adaptation_config(self):
         """Rank adaptation config should work."""
-        config = TTVolterraConfig(
-            solver='mals',
-            rank_adaptation=True,
-            max_rank=10,
-            rank_tol=1e-4
-        )
+        config = TTVolterraConfig(solver="mals", rank_adaptation=True, max_rank=10, rank_tol=1e-4)
 
         assert config.rank_adaptation
         assert config.max_rank == 10
@@ -350,10 +297,7 @@ class TestRankAdaptation:
 
         # ALS
         id_als = TTVolterraIdentifier(
-            memory_length=5,
-            order=2,
-            ranks=[1, 2, 1],
-            config=TTVolterraConfig(solver='als')
+            memory_length=5, order=2, ranks=[1, 2, 1], config=TTVolterraConfig(solver="als")
         )
         id_als.fit(x, y)
 
@@ -362,7 +306,7 @@ class TestRankAdaptation:
             memory_length=5,
             order=2,
             ranks=[1, 2, 1],
-            config=TTVolterraConfig(solver='mals', rank_adaptation=True)
+            config=TTVolterraConfig(solver="mals", rank_adaptation=True),
         )
         id_mals.fit(x, y)
 
@@ -380,15 +324,15 @@ class TestRankAdaptation:
             memory_length=5,
             order=2,
             ranks=[1, 2, 1],
-            config=TTVolterraConfig(solver='mals', rank_adaptation=True)
+            config=TTVolterraConfig(solver="mals", rank_adaptation=True),
         )
         identifier.fit(x, y)
 
         # fit_info should contain rank information
-        assert 'per_output' in identifier.fit_info_
-        per_output_info = identifier.fit_info_['per_output'][0]
-        assert 'initial_ranks' in per_output_info
-        assert 'final_ranks' in per_output_info
+        assert "per_output" in identifier.fit_info_
+        per_output_info = identifier.fit_info_["per_output"][0]
+        assert "initial_ranks" in per_output_info
+        assert "final_ranks" in per_output_info
 
 
 class TestNumericalStability:
@@ -399,11 +343,7 @@ class TestNumericalStability:
         x = np.zeros(100)
         y = np.zeros(100)
 
-        identifier = TTVolterraIdentifier(
-            memory_length=5,
-            order=2,
-            ranks=[1, 2, 1]
-        )
+        identifier = TTVolterraIdentifier(memory_length=5, order=2, ranks=[1, 2, 1])
         identifier.fit(x, y)
 
         assert identifier.is_fitted
@@ -414,22 +354,14 @@ class TestNumericalStability:
         x = np.random.randn(100) * 1e-6
         y = x + 1e-7 * x**2
 
-        identifier = TTVolterraIdentifier(
-            memory_length=5,
-            order=2,
-            ranks=[1, 2, 1]
-        )
+        identifier = TTVolterraIdentifier(memory_length=5, order=2, ranks=[1, 2, 1])
         identifier.fit(x, y)
 
         assert identifier.is_fitted
 
     def test_large_memory_length(self):
         """Large memory length should initialize correctly."""
-        identifier = TTVolterraIdentifier(
-            memory_length=100,
-            order=2,
-            ranks=[1, 3, 1]
-        )
+        identifier = TTVolterraIdentifier(memory_length=100, order=2, ranks=[1, 3, 1])
 
         assert identifier.memory_length == 100
 
@@ -438,11 +370,6 @@ class TestNumericalStability:
         config = TTVolterraConfig(regularization=1e-6)
         assert config.regularization == 1e-6
 
-        identifier = TTVolterraIdentifier(
-            memory_length=5,
-            order=2,
-            ranks=[1, 2, 1],
-            config=config
-        )
+        identifier = TTVolterraIdentifier(memory_length=5, order=2, ranks=[1, 2, 1], config=config)
 
         assert identifier.config.regularization == 1e-6

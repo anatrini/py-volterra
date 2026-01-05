@@ -10,15 +10,15 @@ These tests verify:
 Critical for STEP 2: MIMO Data Conventions
 """
 
-import pytest
 import numpy as np
+import pytest
 from numpy.testing import assert_array_equal
 
 from volterra.utils.shapes import (
     canonicalize_input,
     canonicalize_output,
-    validate_mimo_data,
     infer_dimensions,
+    validate_mimo_data,
 )
 
 
@@ -248,7 +248,7 @@ class TestEdgeCases:
     def test_single_sample_mimo(self):
         """Single time sample MIMO should work."""
         x = np.array([[0.5, 0.3, 0.1]])  # (1, 3)
-        y = np.array([[1.0, 2.0]])       # (1, 2)
+        y = np.array([[1.0, 2.0]])  # (1, 2)
 
         validate_mimo_data(x, y)
         T, I, O = infer_dimensions(x, y)
@@ -266,7 +266,7 @@ class TestEdgeCases:
         validate_mimo_data(x, y)
         T, I, O = infer_dimensions(x, y)
 
-        assert T == T_long
+        assert T_long == T
         assert I == 2
         assert O == 3
 

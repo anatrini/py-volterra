@@ -45,12 +45,10 @@ Typical usage:
     y_recorded = chain.process(x_instrument)  # Nonlinearity → Room → Output
 """
 
-import numpy as np
-from typing import Optional, Union
 from dataclasses import dataclass
-from scipy.signal import fftconvolve
 
-from volterra.utils.shapes import canonicalize_input, canonicalize_output
+import numpy as np
+from scipy.signal import fftconvolve
 
 
 @dataclass
@@ -67,13 +65,14 @@ class AcousticChainConfig:
     trim_output : bool, default=True
         Trim output to original signal length (remove RIR tail)
     """
-    rir_method: str = 'fft'
+
+    rir_method: str = "fft"
     normalize_rir: bool = False
     trim_output: bool = True
 
     def __post_init__(self):
         """Validate configuration."""
-        if self.rir_method not in ('fft', 'direct'):
+        if self.rir_method not in ("fft", "direct"):
             raise ValueError(f"rir_method must be 'fft' or 'direct', got '{self.rir_method}'")
 
 
@@ -136,7 +135,7 @@ class NonlinearThenRIR:
         nonlinear_model,
         rir: np.ndarray,
         sample_rate: int = 48000,
-        config: Optional[AcousticChainConfig] = None
+        config: AcousticChainConfig | None = None,
     ):
         """
         Initialize acoustic chain.
@@ -158,9 +157,9 @@ class NonlinearThenRIR:
             If nonlinear_model is not fitted or RIR shape is invalid
         """
         # Validate nonlinear model
-        if not hasattr(nonlinear_model, 'predict'):
+        if not hasattr(nonlinear_model, "predict"):
             raise ValueError("nonlinear_model must have predict() method")
-        if hasattr(nonlinear_model, 'is_fitted') and not nonlinear_model.is_fitted:
+        if hasattr(nonlinear_model, "is_fitted") and not nonlinear_model.is_fitted:
             raise ValueError("nonlinear_model must be fitted before use")
 
         # Validate and canonicalize RIR
@@ -235,10 +234,10 @@ class NonlinearThenRIR:
         for ch in range(self.n_rir_channels):
             rir_ch = self.rir[:, ch]
 
-            if self.config.rir_method == 'fft':
-                y_ch = fftconvolve(z_mono, rir_ch, mode='full')
+            if self.config.rir_method == "fft":
+                y_ch = fftconvolve(z_mono, rir_ch, mode="full")
             else:
-                y_ch = np.convolve(z_mono, rir_ch, mode='full')
+                y_ch = np.convolve(z_mono, rir_ch, mode="full")
 
             # Trim to original length if requested
             if self.config.trim_output:
@@ -280,9 +279,7 @@ class NonlinearThenRIR:
         >>> rir_right = chain.get_rir(channel=1)
         """
         if channel < 0 or channel >= self.n_rir_channels:
-            raise ValueError(
-                f"channel must be in [0, {self.n_rir_channels-1}], got {channel}"
-            )
+            raise ValueError(f"channel must be in [0, {self.n_rir_channels-1}], got {channel}")
         return self.rir[:, channel]
 
     def get_nonlinear_model(self):

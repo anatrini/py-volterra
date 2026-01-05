@@ -8,26 +8,24 @@ This module provides high-level APIs for Volterra system identification:
 - Memory polynomial: Diagonal-only Volterra (Hammerstein models)
 """
 
-from volterra.models.tt_volterra import (
-    TTVolterraIdentifier,
-    TTVolterraConfig,
-)
-
-from volterra.models.tt_volterra_full import (
-    TTVolterraMIMO,
-    TTVolterraFullConfig,
-)
-
 from volterra.models.gmp import (
     GeneralizedMemoryPolynomial,
     GMPConfig,
 )
+from volterra.models.tt_volterra import (
+    TTVolterraConfig,
+    TTVolterraIdentifier,
+)
+from volterra.models.tt_volterra_full import (
+    TTVolterraFullConfig,
+    TTVolterraMIMO,
+)
 
 __all__ = [
-    "TTVolterraIdentifier",
-    "TTVolterraConfig",
-    "TTVolterraMIMO",
-    "TTVolterraFullConfig",
-    "GeneralizedMemoryPolynomial",
     "GMPConfig",
+    "GeneralizedMemoryPolynomial",
+    "TTVolterraConfig",
+    "TTVolterraFullConfig",
+    "TTVolterraIdentifier",
+    "TTVolterraMIMO",
 ]

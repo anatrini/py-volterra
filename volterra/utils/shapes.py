@@ -24,7 +24,6 @@ This module provides utilities to:
 """
 
 import numpy as np
-from typing import Tuple
 
 
 def canonicalize_input(x: np.ndarray) -> np.ndarray:
@@ -67,9 +66,7 @@ def canonicalize_input(x: np.ndarray) -> np.ndarray:
         # Already MIMO format
         return x
     else:
-        raise ValueError(
-            f"Input must be 1D (T,) or 2D (T, I), got shape {x.shape}"
-        )
+        raise ValueError(f"Input must be 1D (T,) or 2D (T, I), got shape {x.shape}")
 
 
 def canonicalize_output(y: np.ndarray) -> np.ndarray:
@@ -112,16 +109,10 @@ def canonicalize_output(y: np.ndarray) -> np.ndarray:
         # Already multi-output format
         return y
     else:
-        raise ValueError(
-            f"Output must be 1D (T,) or 2D (T, O), got shape {y.shape}"
-        )
+        raise ValueError(f"Output must be 1D (T,) or 2D (T, O), got shape {y.shape}")
 
 
-def validate_mimo_data(
-    x: np.ndarray,
-    y: np.ndarray,
-    require_same_length: bool = True
-) -> None:
+def validate_mimo_data(x: np.ndarray, y: np.ndarray, require_same_length: bool = True) -> None:
     """
     Validate that input and output data have compatible shapes.
 
@@ -155,15 +146,11 @@ def validate_mimo_data(
     """
     # Check x is valid
     if x.ndim not in (1, 2):
-        raise ValueError(
-            f"Input x must be 1D (T,) or 2D (T, I), got shape {x.shape}"
-        )
+        raise ValueError(f"Input x must be 1D (T,) or 2D (T, I), got shape {x.shape}")
 
     # Check y is valid
     if y.ndim not in (1, 2):
-        raise ValueError(
-            f"Output y must be 1D (T,) or 2D (T, O), got shape {y.shape}"
-        )
+        raise ValueError(f"Output y must be 1D (T,) or 2D (T, O), got shape {y.shape}")
 
     # Check not empty
     if x.shape[0] == 0:
@@ -174,12 +161,11 @@ def validate_mimo_data(
     # Check time dimension matches
     if require_same_length and x.shape[0] != y.shape[0]:
         raise ValueError(
-            f"Input and output must have same length, got x.shape={x.shape}, "
-            f"y.shape={y.shape}"
+            f"Input and output must have same length, got x.shape={x.shape}, " f"y.shape={y.shape}"
         )
 
 
-def infer_dimensions(x: np.ndarray, y: np.ndarray) -> Tuple[int, int, int]:
+def infer_dimensions(x: np.ndarray, y: np.ndarray) -> tuple[int, int, int]:
     """
     Infer dimensions T, I, O from input/output data.
 

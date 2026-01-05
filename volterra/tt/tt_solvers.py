@@ -16,19 +16,16 @@ References:
 - Zhao et al. (2016), "Tensor ring decomposition" (for MALS rank adaptation)
 """
 
-import numpy as np
-from typing import List, Optional, Tuple, Callable
-from dataclasses import dataclass
 import warnings
+from dataclasses import dataclass
+
+import numpy as np
 
 # Import TT-ALS implementations
 from volterra.tt.tt_solvers_simple import (
     fit_diagonal_volterra_als,
     fit_diagonal_volterra_mimo_als,
     fit_diagonal_volterra_rls,
-    evaluate_diagonal_volterra,
-    build_delay_matrix_simple,
-    build_delay_matrix_mimo,
 )
 
 
@@ -50,10 +47,11 @@ class TTALSConfig:
     regularization : float, default=1e-8
         Tikhonov regularization for least-squares stability
     """
+
     max_iter: int = 100
     tol: float = 1e-6
     verbose: bool = False
-    init_method: str = 'randn'
+    init_method: str = "randn"
     regularization: float = 1e-8
 
 
@@ -75,17 +73,14 @@ class TTMALSConfig(TTALSConfig):
     adapt_every : int, default=5
         Perform rank adaptation every N sweeps
     """
+
     rank_adaptation: bool = True
     max_rank: int = 10
     rank_tol: float = 1e-4
     adapt_every: int = 5
 
 
-def _build_volterra_design_matrix(
-    x: np.ndarray,
-    memory_length: int,
-    order: int
-) -> np.ndarray:
+def _build_volterra_design_matrix(x: np.ndarray, memory_length: int, _order: int) -> np.ndarray:
     """
     Build Volterra design matrix from input signal.
 
@@ -98,8 +93,8 @@ def _build_volterra_design_matrix(
         Input signal, shape (T,) for SISO or (T, I) for MIMO
     memory_length : int
         Memory length N (number of delays)
-    order : int
-        Volterra order M
+    _order : int
+        Volterra order M - reserved for future full Volterra support
 
     Returns
     -------
@@ -126,7 +121,7 @@ def _build_volterra_design_matrix(
     # Build delay matrix: each row is [x(t), x(t-1), ..., x(t-N+1)]
     X_delay = np.zeros((T_valid, N, I))
     for tau in range(N):
-        X_delay[:, tau, :] = x[N-1-tau:T-tau, :]
+        X_delay[:, tau, :] = x[N - 1 - tau : T - tau, :]
 
     # For single input, squeeze last dimension
     if I == 1:
@@ -136,11 +131,8 @@ def _build_volterra_design_matrix(
 
 
 def _initialize_tt_cores(
-    K: int,
-    N: int,
-    ranks: List[int],
-    method: str = 'randn'
-) -> List[np.ndarray]:
+    K: int, N: int, ranks: list[int], method: str = "randn"
+) -> list[np.ndarray]:
     """
     Initialize TT cores with specified ranks.
 
@@ -177,10 +169,10 @@ def _initialize_tt_cores(
         r_right = ranks[k + 1]
         shape = (r_left, N, r_right)
 
-        if method == 'randn':
+        if method == "randn":
             # Random normal initialization, scaled by 1/sqrt(size)
             core = np.random.randn(*shape) / np.sqrt(N * r_left * r_right)
-        elif method == 'zeros':
+        elif method == "zeros":
             core = np.zeros(shape)
         else:
             raise ValueError(f"Unknown init method: {method}")
@@ -190,7 +182,7 @@ def _initialize_tt_cores(
     return cores
 
 
-def _qr_left_orthogonalize(cores: List[np.ndarray], pivot: int) -> List[np.ndarray]:
+def _qr_left_orthogonalize(cores: list[np.ndarray], pivot: int) -> list[np.ndarray]:
     """
     Left-orthogonalize all cores before pivot using QR decomposition.
 
@@ -231,7 +223,9 @@ def _qr_left_orthogonalize(cores: List[np.ndarray], pivot: int) -> List[np.ndarr
             next_core = cores_orth[k + 1]  # (r_k, n_{k+1}, r_{k+1})
             # Contract R (r_k_new, r_k) with next_core (r_k, n_{k+1}, r_{k+1})
             next_core_flat = next_core.reshape(r_right, -1)
-            cores_orth[k + 1] = (R @ next_core_flat).reshape(-1, next_core.shape[1], next_core.shape[2])
+            cores_orth[k + 1] = (R @ next_core_flat).reshape(
+                -1, next_core.shape[1], next_core.shape[2]
+            )
 
     return cores_orth
 
@@ -241,9 +235,9 @@ def tt_als(
     y: np.ndarray,
     memory_length: int,
     order: int,
-    ranks: List[int],
-    config: Optional[TTALSConfig] = None
-) -> Tuple[List[np.ndarray], dict]:
+    ranks: list[int],
+    config: TTALSConfig | None = None,
+) -> tuple[list[np.ndarray], dict]:
     """
     TT-ALS: Tensor-Train Alternating Least Squares solver for Volterra identification.
 
@@ -317,64 +311,74 @@ def tt_als(
         # MIMO: use additive model with separate kernels per input
         if diagonal_mode:
             cores_per_input, info = fit_diagonal_volterra_mimo_als(
-                x, y,
-                memory_length, order,
+                x,
+                y,
+                memory_length,
+                order,
                 max_iter=config.max_iter,
                 tol=config.tol,
                 regularization=config.regularization,
-                verbose=config.verbose
+                verbose=config.verbose,
             )
             # For compatibility, return cores from first input (will be handled properly in TTVolterraIdentifier)
             cores = cores_per_input
-            info['mimo'] = True
-            info['cores_per_input'] = cores_per_input
+            info["mimo"] = True
+            info["cores_per_input"] = cores_per_input
         else:
             warnings.warn(
                 f"Ranks {ranks} indicate non-diagonal TT. "
                 "Full general TT-Volterra for MIMO is complex. "
                 "Falling back to diagonal MIMO mode.",
-                UserWarning
+                UserWarning,
+                stacklevel=2,
             )
             cores_per_input, info = fit_diagonal_volterra_mimo_als(
-                x, y,
-                memory_length, order,
+                x,
+                y,
+                memory_length,
+                order,
                 max_iter=config.max_iter,
                 tol=config.tol,
                 regularization=config.regularization,
-                verbose=config.verbose
+                verbose=config.verbose,
             )
             cores = cores_per_input
-            info['mimo'] = True
-            info['cores_per_input'] = cores_per_input
+            info["mimo"] = True
+            info["cores_per_input"] = cores_per_input
     else:
         # SISO: standard diagonal Volterra
         if diagonal_mode:
             cores, info = fit_diagonal_volterra_als(
-                x, y,
-                memory_length, order,
+                x,
+                y,
+                memory_length,
+                order,
                 max_iter=config.max_iter,
                 tol=config.tol,
                 regularization=config.regularization,
-                verbose=config.verbose
+                verbose=config.verbose,
             )
-            info['mimo'] = False
+            info["mimo"] = False
         else:
             warnings.warn(
                 f"Ranks {ranks} indicate non-diagonal TT. "
                 "Full general TT-ALS for Volterra is complex. "
                 "Falling back to diagonal (memory polynomial) mode. "
                 "Set all ranks to 1 for diagonal Volterra.",
-                UserWarning
+                UserWarning,
+                stacklevel=2,
             )
             cores, info = fit_diagonal_volterra_als(
-                x, y,
-                memory_length, order,
+                x,
+                y,
+                memory_length,
+                order,
                 max_iter=config.max_iter,
                 tol=config.tol,
                 regularization=config.regularization,
-                verbose=config.verbose
+                verbose=config.verbose,
             )
-            info['mimo'] = False
+            info["mimo"] = False
 
     return cores, info
 
@@ -384,9 +388,9 @@ def tt_mals(
     y: np.ndarray,
     memory_length: int,
     order: int,
-    initial_ranks: List[int],
-    config: Optional[TTMALSConfig] = None
-) -> Tuple[List[np.ndarray], dict]:
+    initial_ranks: list[int],
+    config: TTMALSConfig | None = None,
+) -> tuple[list[np.ndarray], dict]:
     """
     TT-MALS: Modified ALS with rank adaptation for Volterra identification.
 
@@ -446,15 +450,16 @@ def tt_mals(
     warnings.warn(
         "TT-MALS is a placeholder implementation. "
         "Full rank adaptation requires SVD truncation logic.",
-        UserWarning
+        UserWarning,
+        stacklevel=2,
     )
 
     info = {
         **info_als,
-        'initial_ranks': initial_ranks,
-        'final_ranks': [core.shape[0] for core in cores] + [1],
-        'rank_adaptation_steps': 0,
-        'message': 'Placeholder implementation - no rank adaptation performed'
+        "initial_ranks": initial_ranks,
+        "final_ranks": [core.shape[0] for core in cores] + [1],
+        "rank_adaptation_steps": 0,
+        "message": "Placeholder implementation - no rank adaptation performed",
     }
 
     return cores, info
@@ -465,11 +470,11 @@ def tt_rls(
     y: np.ndarray,
     memory_length: int,
     order: int,
-    ranks: List[int],
+    ranks: list[int],
     forgetting_factor: float = 0.99,
     regularization: float = 1e-4,
-    verbose: bool = False
-) -> Tuple[List[np.ndarray], dict]:
+    verbose: bool = False,
+) -> tuple[list[np.ndarray], dict]:
     """
     Online/adaptive diagonal TT-Volterra identification using Recursive Least Squares.
 
@@ -544,18 +549,21 @@ def tt_rls(
     if not all(r == 1 for r in ranks):
         warnings.warn(
             f"RLS only supports diagonal TT. Ranks {ranks} will be treated as diagonal.",
-            UserWarning
+            UserWarning,
+            stacklevel=2,
         )
 
     # Call RLS implementation
     cores, info = fit_diagonal_volterra_rls(
-        x, y,
-        memory_length, order,
+        x,
+        y,
+        memory_length,
+        order,
         forgetting_factor=forgetting_factor,
         regularization=regularization,
-        verbose=verbose
+        verbose=verbose,
     )
 
-    info['mimo'] = False
+    info["mimo"] = False
 
     return cores, info

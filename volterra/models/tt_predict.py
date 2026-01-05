@@ -5,19 +5,17 @@ Implements proper causal filtering with memory for Volterra prediction.
 """
 
 import numpy as np
-from typing import List
-from volterra.tt.tt_tensor import tt_matvec
+
 from volterra.tt.tt_solvers_simple import (
-    evaluate_diagonal_volterra,
-    build_delay_matrix_simple,
     build_delay_matrix_mimo,
+    build_delay_matrix_simple,
+    evaluate_diagonal_volterra,
 )
+from volterra.tt.tt_tensor import tt_matvec
 
 
 def predict_diagonal_volterra(
-    cores: List[np.ndarray],
-    x: np.ndarray,
-    memory_length: int
+    cores: list[np.ndarray], x: np.ndarray, memory_length: int
 ) -> np.ndarray:
     """
     Predict using diagonal Volterra (memory polynomial) model.
@@ -53,9 +51,7 @@ def predict_diagonal_volterra(
 
 
 def predict_general_volterra_sliding(
-    cores: List[np.ndarray],
-    x: np.ndarray,
-    memory_length: int
+    cores: list[np.ndarray], x: np.ndarray, memory_length: int
 ) -> np.ndarray:
     """
     Predict using general TT-Volterra with sliding window.
@@ -94,7 +90,7 @@ def predict_general_volterra_sliding(
     for t in range(T_valid):
         # Extract memory window: x[t+N-1], x[t+N-2], ..., x[t]
         # This is the most recent N samples up to time t+N-1
-        x_window = x[t:t+N][::-1]  # Reverse to get [newest, ..., oldest]
+        x_window = x[t : t + N][::-1]  # Reverse to get [newest, ..., oldest]
 
         # Evaluate using TT-matvec
         y_pred[t] = tt_matvec(cores, x_window)
@@ -103,11 +99,11 @@ def predict_general_volterra_sliding(
 
 
 def predict_with_warmup(
-    cores: List[np.ndarray],
+    cores: list[np.ndarray],
     x: np.ndarray,
     memory_length: int,
     warmup_value: float = 0.0,
-    diagonal_mode: bool = True
+    diagonal_mode: bool = True,
 ) -> np.ndarray:
     """
     Predict with warmup padding to match input length.
@@ -148,15 +144,13 @@ def predict_with_warmup(
 
     # Pad with warmup
     y_full = np.full(T, warmup_value)
-    y_full[N-1:] = y_valid
+    y_full[N - 1 :] = y_valid
 
     return y_full
 
 
 def predict_diagonal_volterra_mimo(
-    cores_per_input: List[List[np.ndarray]],
-    x: np.ndarray,
-    memory_length: int
+    cores_per_input: list[list[np.ndarray]], x: np.ndarray, memory_length: int
 ) -> np.ndarray:
     """
     Predict using diagonal Volterra MIMO model (additive).

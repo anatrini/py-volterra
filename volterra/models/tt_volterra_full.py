@@ -33,25 +33,21 @@ Typical usage:
     print(identifier.diagnostics())
 """
 
-import numpy as np
-from typing import List, Optional, Dict, Tuple
 from dataclasses import dataclass
-import warnings
 
+import numpy as np
+
+from volterra.tt.tt_als_mimo import (
+    build_mimo_delay_matrix,
+    evaluate_tt_volterra_mimo,
+    tt_als_full_mimo,
+)
 from volterra.utils.shapes import (
     canonicalize_input,
     canonicalize_output,
-    validate_mimo_data,
     infer_dimensions,
+    validate_mimo_data,
 )
-
-from volterra.tt.tt_als_mimo import (
-    tt_als_full_mimo,
-    evaluate_tt_volterra_mimo,
-    build_mimo_delay_matrix,
-)
-
-from volterra.tt.tt_cores import validate_tt_cores_structure
 
 
 @dataclass
@@ -72,6 +68,7 @@ class TTVolterraFullConfig:
     check_monotonic : bool, default=True
         Enforce monotonic loss decrease (reject bad updates)
     """
+
     max_iter: int = 100
     tol: float = 1e-6
     regularization: float = 1e-8
@@ -152,8 +149,8 @@ class TTVolterraMIMO:
         self,
         memory_length: int,
         order: int,
-        ranks: List[int],
-        config: Optional[TTVolterraFullConfig] = None
+        ranks: list[int],
+        config: TTVolterraFullConfig | None = None,
     ):
         """
         Initialize full TT-Volterra identifier.
@@ -180,13 +177,9 @@ class TTVolterraMIMO:
         if order < 1:
             raise ValueError(f"order must be >= 1, got {order}")
         if len(ranks) != order + 1:
-            raise ValueError(
-                f"Need {order+1} ranks for order {order}, got {len(ranks)}"
-            )
+            raise ValueError(f"Need {order+1} ranks for order {order}, got {len(ranks)}")
         if ranks[0] != 1 or ranks[-1] != 1:
-            raise ValueError(
-                f"Boundary ranks must be 1, got r_0={ranks[0]}, r_M={ranks[-1]}"
-            )
+            raise ValueError(f"Boundary ranks must be 1, got r_0={ranks[0]}, r_M={ranks[-1]}")
 
         self.memory_length = memory_length
         self.order = order
@@ -194,10 +187,10 @@ class TTVolterraMIMO:
         self.config = config or TTVolterraFullConfig()
 
         # Fitted model attributes (set after fit())
-        self.cores_: Optional[List[List[np.ndarray]]] = None
-        self.fit_info_: Optional[Dict] = None
-        self.n_outputs_: Optional[int] = None
-        self.n_inputs_: Optional[int] = None
+        self.cores_: list[list[np.ndarray]] | None = None
+        self.fit_info_: dict | None = None
+        self.n_outputs_: int | None = None
+        self.n_inputs_: int | None = None
 
     @property
     def is_fitted(self) -> bool:
@@ -230,7 +223,7 @@ class TTVolterraMIMO:
                     n_params += core.size
             return n_params
 
-    def fit(self, x: np.ndarray, y: np.ndarray) -> 'TTVolterraMIMO':
+    def fit(self, x: np.ndarray, y: np.ndarray) -> "TTVolterraMIMO":
         """
         Fit full TT-Volterra model to input-output data.
 
@@ -272,7 +265,9 @@ class TTVolterraMIMO:
         self.n_outputs_ = O
 
         if self.config.verbose:
-            print(f"Fitting full TT-Volterra: T={T}, I={I}, O={O}, N={self.memory_length}, M={self.order}")
+            print(
+                f"Fitting full TT-Volterra: T={T}, I={I}, O={O}, N={self.memory_length}, M={self.order}"
+            )
             print(f"Ranks: {self.ranks} (diagonal: {self.is_diagonal})")
             print(f"Total parameters (estimated): {self.total_parameters}")
 
@@ -291,7 +286,8 @@ class TTVolterraMIMO:
 
             # Fit using full TT-ALS
             cores, info = tt_als_full_mimo(
-                x_o, y_o,
+                x_o,
+                y_o,
                 memory_length=self.memory_length,
                 order=self.order,
                 ranks=self.ranks,
@@ -299,7 +295,7 @@ class TTVolterraMIMO:
                 tol=self.config.tol,
                 regularization=self.config.regularization,
                 verbose=self.config.verbose,
-                check_monotonic=self.config.check_monotonic
+                check_monotonic=self.config.check_monotonic,
             )
 
             cores_all.append(cores)
@@ -307,9 +303,9 @@ class TTVolterraMIMO:
 
         self.cores_ = cores_all
         self.fit_info_ = {
-            'per_output': fit_infos,
-            'n_outputs': O,
-            'n_inputs': I,
+            "per_output": fit_infos,
+            "n_outputs": O,
+            "n_inputs": I,
         }
 
         return self
@@ -344,16 +340,12 @@ class TTVolterraMIMO:
         x_canon = canonicalize_input(x)  # (T, I)
         T, I = x_canon.shape
 
-        if I != self.n_inputs_:
-            raise ValueError(
-                f"Input has {I} channels, but model was fitted with {self.n_inputs_}"
-            )
+        if self.n_inputs_ != I:
+            raise ValueError(f"Input has {I} channels, but model was fitted with {self.n_inputs_}")
 
         # Check sufficient samples for memory
-        if T < self.memory_length:
-            raise ValueError(
-                f"Input has {T} samples, but memory_length={self.memory_length}"
-            )
+        if self.memory_length > T:
+            raise ValueError(f"Input has {T} samples, but memory_length={self.memory_length}")
 
         O = self.n_outputs_
         T_valid = T - self.memory_length + 1
@@ -373,7 +365,7 @@ class TTVolterraMIMO:
         else:
             return y_pred
 
-    def get_cores(self, output_idx: int = 0) -> List[np.ndarray]:
+    def get_cores(self, output_idx: int = 0) -> list[np.ndarray]:
         """
         Get TT cores for specified output channel.
 
@@ -402,13 +394,11 @@ class TTVolterraMIMO:
             raise ValueError("Model not fitted. Call fit() first.")
 
         if output_idx < 0 or output_idx >= self.n_outputs_:
-            raise ValueError(
-                f"output_idx must be in [0, {self.n_outputs_-1}], got {output_idx}"
-            )
+            raise ValueError(f"output_idx must be in [0, {self.n_outputs_-1}], got {output_idx}")
 
         return self.cores_[output_idx]
 
-    def diagnostics(self, output_idx: int = 0) -> Dict:
+    def diagnostics(self, output_idx: int = 0) -> dict:
         """
         Get diagnostic information for specified output.
 
@@ -443,11 +433,9 @@ class TTVolterraMIMO:
             raise ValueError("Model not fitted. Call fit() first.")
 
         if output_idx < 0 or output_idx >= self.n_outputs_:
-            raise ValueError(
-                f"output_idx must be in [0, {self.n_outputs_-1}], got {output_idx}"
-            )
+            raise ValueError(f"output_idx must be in [0, {self.n_outputs_-1}], got {output_idx}")
 
-        fit_info = self.fit_info_['per_output'][output_idx]
+        fit_info = self.fit_info_["per_output"][output_idx]
         cores = self.cores_[output_idx]
 
         # Extract ranks from cores
@@ -459,20 +447,20 @@ class TTVolterraMIMO:
         n_params = sum(core.size for core in cores)
 
         diagnostics = {
-            'loss_history': fit_info.get('loss_history', []),
-            'converged': fit_info.get('converged', False),
-            'final_loss': fit_info.get('final_loss', np.inf),
-            'iterations': fit_info.get('iterations', 0),
-            'ranks': actual_ranks,
-            'total_parameters': n_params,
-            'condition_history': fit_info.get('condition_history', []),
-            'mimo': fit_info.get('mimo', False),
-            'mode_size': fit_info.get('mode_size', self.memory_length),
+            "loss_history": fit_info.get("loss_history", []),
+            "converged": fit_info.get("converged", False),
+            "final_loss": fit_info.get("final_loss", np.inf),
+            "iterations": fit_info.get("iterations", 0),
+            "ranks": actual_ranks,
+            "total_parameters": n_params,
+            "condition_history": fit_info.get("condition_history", []),
+            "mimo": fit_info.get("mimo", False),
+            "mode_size": fit_info.get("mode_size", self.memory_length),
         }
 
         return diagnostics
 
-    def export_model(self, output_idx: int = 0) -> Dict:
+    def export_model(self, output_idx: int = 0) -> dict:
         """
         Export model parameters for C++/Rust/external implementation.
 
@@ -507,17 +495,17 @@ class TTVolterraMIMO:
         ranks = [cores[0].shape[0]] + [c.shape[2] for c in cores]
 
         export = {
-            'cores': cores,
-            'ranks': ranks,
-            'memory_length': self.memory_length,
-            'order': self.order,
-            'n_inputs': self.n_inputs_,
-            'metadata': {
-                'model_type': 'full_tt_volterra',
-                'diagonal': self.is_diagonal,
-                'total_parameters': sum(c.size for c in cores),
-                'fit_info': self.fit_info_['per_output'][output_idx],
-            }
+            "cores": cores,
+            "ranks": ranks,
+            "memory_length": self.memory_length,
+            "order": self.order,
+            "n_inputs": self.n_inputs_,
+            "metadata": {
+                "model_type": "full_tt_volterra",
+                "diagonal": self.is_diagonal,
+                "total_parameters": sum(c.size for c in cores),
+                "fit_info": self.fit_info_["per_output"][output_idx],
+            },
         }
 
         return export

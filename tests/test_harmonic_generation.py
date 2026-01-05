@@ -5,10 +5,8 @@ These tests verify that each Volterra kernel order generates correct harmonic co
 This is CRITICAL for mathematical correctness - if these fail, the implementation is WRONG.
 """
 
-import pytest
 import numpy as np
-from numpy.testing import assert_allclose
-from scipy import signal as sp_signal
+import pytest
 from scipy.fft import rfft, rfftfreq
 
 from volterra import VolterraKernelFull, VolterraProcessorFull
@@ -32,7 +30,7 @@ class TestHarmonicGeneration:
     def _analyze_harmonics(self, signal, fs, f0, num_harmonics=10):
         """Analyze harmonic content of signal."""
         Y = rfft(signal)
-        freqs = rfftfreq(len(signal), 1/fs)
+        freqs = rfftfreq(len(signal), 1 / fs)
 
         harmonics = {}
         for k in range(1, num_harmonics + 1):
@@ -59,12 +57,7 @@ class TestHarmonicGeneration:
         h2[0] = 0.5  # Memoryless quadratic
 
         kernel = VolterraKernelFull(
-            h1=h1,
-            h2=h2,
-            h3_diagonal=None,
-            h4_diagonal=None,
-            h5_diagonal=None,
-            h2_is_diagonal=True
+            h1=h1, h2=h2, h3_diagonal=None, h4_diagonal=None, h5_diagonal=None, h2_is_diagonal=True
         )
 
         processor = VolterraProcessorFull(kernel, sample_rate=sample_rate, use_numba=False)
@@ -88,8 +81,12 @@ class TestHarmonicGeneration:
 
         # Critical checks
         assert h2_level > -20, f"2nd harmonic too weak: {h2_level:.1f} dB"
-        assert h1_level < -60, f"Fundamental should be suppressed: {h1_level:.1f} dB (expected < -60 dB)"
-        assert h3_level < -60, f"3rd harmonic should be suppressed: {h3_level:.1f} dB (expected < -60 dB)"
+        assert (
+            h1_level < -60
+        ), f"Fundamental should be suppressed: {h1_level:.1f} dB (expected < -60 dB)"
+        assert (
+            h3_level < -60
+        ), f"3rd harmonic should be suppressed: {h3_level:.1f} dB (expected < -60 dB)"
 
         # 4th harmonic may be present (it's even)
         # But should be weaker than 2nd
@@ -109,12 +106,7 @@ class TestHarmonicGeneration:
         h3[0] = 0.3  # Memoryless cubic
 
         kernel = VolterraKernelFull(
-            h1=h1,
-            h2=None,
-            h3_diagonal=h3,
-            h4_diagonal=None,
-            h5_diagonal=None,
-            h2_is_diagonal=True
+            h1=h1, h2=None, h3_diagonal=h3, h4_diagonal=None, h5_diagonal=None, h2_is_diagonal=True
         )
 
         processor = VolterraProcessorFull(kernel, sample_rate=sample_rate, use_numba=False)
@@ -136,8 +128,12 @@ class TestHarmonicGeneration:
         h4_level = harmonics.get(4, -120)
 
         # Critical checks: even harmonics MUST be suppressed
-        assert h2_level < -60, f"2nd harmonic (even) should be suppressed: {h2_level:.1f} dB (expected < -60 dB)"
-        assert h4_level < -60, f"4th harmonic (even) should be suppressed: {h4_level:.1f} dB (expected < -60 dB)"
+        assert (
+            h2_level < -60
+        ), f"2nd harmonic (even) should be suppressed: {h2_level:.1f} dB (expected < -60 dB)"
+        assert (
+            h4_level < -60
+        ), f"4th harmonic (even) should be suppressed: {h4_level:.1f} dB (expected < -60 dB)"
 
         # 3rd harmonic should be present
         assert h3_level > -40, f"3rd harmonic too weak: {h3_level:.1f} dB"
@@ -150,12 +146,7 @@ class TestHarmonicGeneration:
         h5[0] = 0.2
 
         kernel = VolterraKernelFull(
-            h1=h1,
-            h2=None,
-            h3_diagonal=None,
-            h4_diagonal=None,
-            h5_diagonal=h5,
-            h2_is_diagonal=True
+            h1=h1, h2=None, h3_diagonal=None, h4_diagonal=None, h5_diagonal=h5, h2_is_diagonal=True
         )
 
         processor = VolterraProcessorFull(kernel, sample_rate=sample_rate, use_numba=False)
@@ -189,14 +180,15 @@ class TestHarmonicGeneration:
         N = 512
 
         # Individual kernels
-        h1 = np.zeros(N); h1[0] = 0.9
-        h2 = np.zeros(N); h2[0] = 0.1
-        h3 = np.zeros(N); h3[0] = 0.02
+        h1 = np.zeros(N)
+        h1[0] = 0.9
+        h2 = np.zeros(N)
+        h2[0] = 0.1
+        h3 = np.zeros(N)
+        h3[0] = 0.02
 
         # Combined kernel
-        kernel_combined = VolterraKernelFull(
-            h1=h1, h2=h2, h3_diagonal=h3, h2_is_diagonal=True
-        )
+        kernel_combined = VolterraKernelFull(h1=h1, h2=h2, h3_diagonal=h3, h2_is_diagonal=True)
 
         # Separate kernels
         kernel_h1_only = VolterraKernelFull(h1=h1)
@@ -204,7 +196,9 @@ class TestHarmonicGeneration:
         kernel_h3_only = VolterraKernelFull(h1=np.zeros(N), h3_diagonal=h3)
 
         # Create processors
-        proc_combined = VolterraProcessorFull(kernel_combined, sample_rate=sample_rate, use_numba=False)
+        proc_combined = VolterraProcessorFull(
+            kernel_combined, sample_rate=sample_rate, use_numba=False
+        )
         proc_h1 = VolterraProcessorFull(kernel_h1_only, sample_rate=sample_rate, use_numba=False)
         proc_h2 = VolterraProcessorFull(kernel_h2_only, sample_rate=sample_rate, use_numba=False)
         proc_h3 = VolterraProcessorFull(kernel_h3_only, sample_rate=sample_rate, use_numba=False)
@@ -224,30 +218,31 @@ class TestHarmonicGeneration:
 
         # Verify
         max_diff = np.max(np.abs(out_combined - out_sum))
-        rms_diff = np.sqrt(np.mean((out_combined - out_sum)**2))
+        rms_diff = np.sqrt(np.mean((out_combined - out_sum) ** 2))
 
         assert max_diff < 1e-10, f"Combined output doesn't match sum: max_diff={max_diff:.2e}"
         assert rms_diff < 1e-11, f"Combined output doesn't match sum: rms_diff={rms_diff:.2e}"
 
-    @pytest.mark.parametrize("order,coefficient", [
-        (2, 0.1),
-        (3, 0.05),
-        (5, 0.03)
-    ])
-    def test_output_scales_with_coefficient(self, order, coefficient, sample_rate, test_frequency, duration):
+    @pytest.mark.parametrize("order,coefficient", [(2, 0.1), (3, 0.05), (5, 0.03)])
+    def test_output_scales_with_coefficient(
+        self, order, coefficient, sample_rate, test_frequency, duration
+    ):
         """Output amplitude should scale linearly with kernel coefficient."""
         N = 512
         h1 = np.zeros(N)
 
         # Create kernel with given coefficient
         if order == 2:
-            h2 = np.zeros(N); h2[0] = coefficient
+            h2 = np.zeros(N)
+            h2[0] = coefficient
             kernel = VolterraKernelFull(h1=h1, h2=h2, h2_is_diagonal=True)
         elif order == 3:
-            h3 = np.zeros(N); h3[0] = coefficient
+            h3 = np.zeros(N)
+            h3[0] = coefficient
             kernel = VolterraKernelFull(h1=h1, h3_diagonal=h3)
         elif order == 5:
-            h5 = np.zeros(N); h5[0] = coefficient
+            h5 = np.zeros(N)
+            h5[0] = coefficient
             kernel = VolterraKernelFull(h1=h1, h5_diagonal=h5)
 
         processor = VolterraProcessorFull(kernel, sample_rate=sample_rate, use_numba=False)
@@ -261,9 +256,10 @@ class TestHarmonicGeneration:
         rms_output = np.sqrt(np.mean(output**2))
 
         # For order n: output ~ coefficient * amplitude^n
-        expected_rms_order_of_magnitude = coefficient * (0.2 ** order)
+        expected_rms_order_of_magnitude = coefficient * (0.2**order)
 
         # Check order of magnitude is reasonable
         assert rms_output > 0, "Output is zero (wrong!)"
-        assert rms_output > expected_rms_order_of_magnitude * 0.01, \
-            f"Output too weak for order {order}"
+        assert (
+            rms_output > expected_rms_order_of_magnitude * 0.01
+        ), f"Output too weak for order {order}"

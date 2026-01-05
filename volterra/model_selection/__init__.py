@@ -6,11 +6,11 @@ Generalized Memory Polynomial (GMP), and full TT-Volterra models.
 """
 
 from volterra.model_selection.selector import (
-    ModelSelector,
     ModelSelectionConfig,
+    ModelSelector,
 )
 
 __all__ = [
-    "ModelSelector",
     "ModelSelectionConfig",
+    "ModelSelector",
 ]

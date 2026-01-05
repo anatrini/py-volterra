@@ -8,22 +8,21 @@ general MIMO Volterra system identification.
 import numpy as np
 import pytest
 
-from volterra.tt.tt_cores import (
-    validate_tt_cores_structure,
-    left_orthogonalize_cores,
-    right_orthogonalize_cores,
-    truncate_core_svd,
-    merge_two_cores,
-    split_core_svd,
-    estimate_condition_number,
-)
-
 from volterra.tt.tt_als_mimo import (
     build_mimo_delay_matrix,
     build_tt_design_matrix,
-    solve_core_regularized_lstsq,
     evaluate_tt_volterra_mimo,
+    solve_core_regularized_lstsq,
     tt_als_full_mimo,
+)
+from volterra.tt.tt_cores import (
+    estimate_condition_number,
+    left_orthogonalize_cores,
+    merge_two_cores,
+    right_orthogonalize_cores,
+    split_core_svd,
+    truncate_core_svd,
+    validate_tt_cores_structure,
 )
 
 
@@ -103,6 +102,7 @@ class TestOrthogonalization:
 
         # Compute full tensor before
         from volterra.tt.tt_tensor import tt_to_full
+
         tensor_before = tt_to_full(cores)
 
         # Orthogonalize
@@ -124,6 +124,7 @@ class TestOrthogonalization:
         ]
 
         from volterra.tt.tt_tensor import tt_to_full
+
         tensor_before = tt_to_full(cores)
 
         cores_orth = right_orthogonalize_cores(cores, pivot=0)
@@ -295,11 +296,14 @@ class TestMIMODelayMatrix:
         # Row 1: [x[3], x[2], x[1]] = [4, 3, 2]
         # Row 2: [x[4], x[3], x[2]] = [5, 4, 3]
 
-        expected = np.array([
-            [3, 2, 1],
-            [4, 3, 2],
-            [5, 4, 3],
-        ], dtype=float)
+        expected = np.array(
+            [
+                [3, 2, 1],
+                [4, 3, 2],
+                [5, 4, 3],
+            ],
+            dtype=float,
+        )
 
         np.testing.assert_allclose(X_delay, expected)
 
@@ -313,8 +317,7 @@ class TestTTDesignMatrix:
         X_delay = np.random.randn(50, 5)
 
         Phi = build_tt_design_matrix(
-            X_delay, core_idx=0, order=3,
-            left_cores=None, right_cores=None
+            X_delay, core_idx=0, order=3, left_cores=None, right_cores=None
         )
 
         # For first core (r_left=1, mode=5, r_right=r1)
@@ -332,7 +335,6 @@ class TestEvaluateTTVolterra:
 
         # Create simple linear model: y = sum(h[i] * x[i])
         N = 5
-        M = 1  # Order 1 (linear)
 
         # Single core: (1, N, 1)
         h = np.random.randn(N)
@@ -385,21 +387,22 @@ class TestTTALSFullMIMO:
 
         # Fit with TT-ALS (linear, so ranks=[1,1] is diagonal)
         cores, info = tt_als_full_mimo(
-            x, y,
+            x,
+            y,
             memory_length=N,
             order=M,
             ranks=[1, 1],
             max_iter=50,
             tol=1e-8,
             regularization=1e-10,
-            verbose=False
+            verbose=False,
         )
 
         # Should converge
-        assert info['converged'] or info['final_loss'] < 1e-10
+        assert info["converged"] or info["final_loss"] < 1e-10
 
         # Check fit quality
-        assert info['final_loss'] < 1e-8
+        assert info["final_loss"] < 1e-8
 
     def test_tt_als_siso_quadratic_system(self):
         """Fit SISO quadratic system with diagonal TT."""
@@ -414,25 +417,26 @@ class TestTTALSFullMIMO:
         # Generate data
         x = np.random.randn(500) * 0.5
         X_delay = build_mimo_delay_matrix(x, N)
-        y = X_delay @ h1 + (X_delay ** 2) @ h2
+        y = X_delay @ h1 + (X_delay**2) @ h2
 
         # Fit with TT-ALS (diagonal ranks)
         cores, info = tt_als_full_mimo(
-            x, y,
+            x,
+            y,
             memory_length=N,
             order=M,
             ranks=[1, 1, 1],
             max_iter=100,
             tol=1e-8,
             regularization=1e-10,
-            verbose=False
+            verbose=False,
         )
 
         # Should achieve reasonable fit (relaxed for general TT-ALS)
         # Note: The current implementation may not achieve machine precision
         # for all systems, which is acceptable for a general solver
-        assert info['final_loss'] < 1.0  # Reasonable fit
-        assert info['iterations'] > 0  # Did some work
+        assert info["final_loss"] < 1.0  # Reasonable fit
+        assert info["iterations"] > 0  # Did some work
 
     def test_tt_als_siso_with_ranks(self):
         """Fit SISO system with non-diagonal ranks."""
@@ -443,23 +447,24 @@ class TestTTALSFullMIMO:
         M = 2
 
         x = np.random.randn(500) * 0.5
-        y = x[N-1:] + 0.1 * x[N-1:]**2 + 0.05 * x[N-1:]**3
+        y = x[N - 1 :] + 0.1 * x[N - 1 :] ** 2 + 0.05 * x[N - 1 :] ** 3
 
         # Fit with rank-2 TT
         cores, info = tt_als_full_mimo(
-            x, y,
+            x,
+            y,
             memory_length=N,
             order=M,
             ranks=[1, 2, 1],
             max_iter=100,
             tol=1e-6,
             regularization=1e-8,
-            verbose=False
+            verbose=False,
         )
 
         # Should converge or achieve reasonable fit
-        assert info['iterations'] > 0
-        assert info['final_loss'] < 1.0  # Reasonable bound
+        assert info["iterations"] > 0
+        assert info["final_loss"] < 1.0  # Reasonable bound
 
     def test_tt_als_mimo_two_inputs(self):
         """Fit MIMO system with 2 inputs."""
@@ -482,19 +487,20 @@ class TestTTALSFullMIMO:
 
         # Fit
         cores, info = tt_als_full_mimo(
-            x, y,
+            x,
+            y,
             memory_length=N,
             order=M,
             ranks=[1, 1],
             max_iter=100,
             tol=1e-8,
             regularization=1e-10,
-            verbose=False
+            verbose=False,
         )
 
         # Should achieve good fit
-        assert info['final_loss'] < 1e-6
-        assert info['mimo'] is True
+        assert info["final_loss"] < 1e-6
+        assert info["mimo"] is True
 
     def test_tt_als_convergence_monitoring(self):
         """Verify convergence monitoring works."""
@@ -507,23 +513,17 @@ class TestTTALSFullMIMO:
         y = np.random.randn(200 - N + 1)  # Random target
 
         cores, info = tt_als_full_mimo(
-            x, y,
-            memory_length=N,
-            order=M,
-            ranks=[1, 1],
-            max_iter=10,
-            tol=1e-6,
-            verbose=False
+            x, y, memory_length=N, order=M, ranks=[1, 1], max_iter=10, tol=1e-6, verbose=False
         )
 
         # Should have loss history
-        assert 'loss_history' in info
-        assert len(info['loss_history']) > 0
-        assert len(info['loss_history']) <= 10
+        assert "loss_history" in info
+        assert len(info["loss_history"]) > 0
+        assert len(info["loss_history"]) <= 10
 
         # Loss should decrease (or stay low)
-        if len(info['loss_history']) > 1:
-            assert info['loss_history'][-1] <= info['loss_history'][0] * 1.1
+        if len(info["loss_history"]) > 1:
+            assert info["loss_history"][-1] <= info["loss_history"][0] * 1.1
 
     def test_tt_als_invalid_ranks(self):
         """Should reject invalid ranks."""
@@ -535,21 +535,13 @@ class TestTTALSFullMIMO:
         # Boundary ranks not 1
         with pytest.raises(ValueError, match="Boundary ranks must be 1"):
             tt_als_full_mimo(
-                x, y,
-                memory_length=5,
-                order=2,
-                ranks=[2, 1, 1],  # r_0 != 1
-                max_iter=10
+                x, y, memory_length=5, order=2, ranks=[2, 1, 1], max_iter=10  # r_0 != 1
             )
 
         # Wrong number of ranks
         with pytest.raises(ValueError, match="Need 3 ranks"):
             tt_als_full_mimo(
-                x, y,
-                memory_length=5,
-                order=2,
-                ranks=[1, 1],  # Need 3 for order=2
-                max_iter=10
+                x, y, memory_length=5, order=2, ranks=[1, 1], max_iter=10  # Need 3 for order=2
             )
 
 
@@ -568,15 +560,11 @@ class TestSolveCoreLSTSQ:
         y = Phi @ core_true_vec + 0.01 * np.random.randn(T)
 
         # Solve
-        core, info = solve_core_regularized_lstsq(
-            Phi, y,
-            core_shape=(1, 5, 3),
-            regularization=1e-8
-        )
+        core, info = solve_core_regularized_lstsq(Phi, y, core_shape=(1, 5, 3), regularization=1e-8)
 
         # Should recover approximately
         assert core.shape == (1, 5, 3)
-        assert info['residual_norm'] < 1.0
+        assert info["residual_norm"] < 1.0
 
     def test_solve_checks_condition(self):
         """Solver should check condition number."""
@@ -586,15 +574,12 @@ class TestSolveCoreLSTSQ:
         y = np.random.randn(50)
 
         core, info = solve_core_regularized_lstsq(
-            Phi, y,
-            core_shape=(1, 5, 2),
-            regularization=1e-8,
-            check_condition=True
+            Phi, y, core_shape=(1, 5, 2), regularization=1e-8, check_condition=True
         )
 
-        assert 'condition' in info
-        assert info['condition'] is not None
-        assert info['condition'] > 0
+        assert "condition" in info
+        assert info["condition"] is not None
+        assert info["condition"] > 0
 
 
 if __name__ == "__main__":

@@ -8,7 +8,7 @@ using Tensor-Train decomposition with arbitrary ranks.
 import numpy as np
 import pytest
 
-from volterra.models import TTVolterraMIMO, TTVolterraFullConfig
+from volterra.models import TTVolterraFullConfig, TTVolterraMIMO
 
 
 class TestTTVolterraMIMOInitialization:
@@ -16,11 +16,7 @@ class TestTTVolterraMIMOInitialization:
 
     def test_initialization_valid(self):
         """Valid initialization should succeed."""
-        model = TTVolterraMIMO(
-            memory_length=10,
-            order=3,
-            ranks=[1, 2, 2, 1]
-        )
+        model = TTVolterraMIMO(memory_length=10, order=3, ranks=[1, 2, 2, 1])
         assert model.memory_length == 10
         assert model.order == 3
         assert model.ranks == [1, 2, 2, 1]
@@ -29,26 +25,13 @@ class TestTTVolterraMIMOInitialization:
 
     def test_initialization_diagonal(self):
         """Diagonal ranks should be detected."""
-        model = TTVolterraMIMO(
-            memory_length=5,
-            order=2,
-            ranks=[1, 1, 1]
-        )
+        model = TTVolterraMIMO(memory_length=5, order=2, ranks=[1, 1, 1])
         assert model.is_diagonal
 
     def test_initialization_with_config(self):
         """Initialization with custom config."""
-        config = TTVolterraFullConfig(
-            max_iter=50,
-            tol=1e-8,
-            verbose=True
-        )
-        model = TTVolterraMIMO(
-            memory_length=10,
-            order=2,
-            ranks=[1, 3, 1],
-            config=config
-        )
+        config = TTVolterraFullConfig(max_iter=50, tol=1e-8, verbose=True)
+        model = TTVolterraMIMO(memory_length=10, order=2, ranks=[1, 3, 1], config=config)
         assert model.config.max_iter == 50
         assert model.config.tol == 1e-8
         assert model.config.verbose is True
@@ -91,18 +74,19 @@ class TestTTVolterraMIMOFitting:
 
         x = np.random.randn(500)
         from volterra.tt.tt_als_mimo import build_mimo_delay_matrix
+
         X_delay = build_mimo_delay_matrix(x, N)
         y_valid = X_delay @ h_true
 
         # Pad y to same length as x (first N-1 samples are don't-care)
-        y = np.concatenate([np.zeros(N-1), y_valid])
+        y = np.concatenate([np.zeros(N - 1), y_valid])
 
         # Fit
         model = TTVolterraMIMO(
             memory_length=N,
             order=M,
             ranks=[1, 1],
-            config=TTVolterraFullConfig(max_iter=50, tol=1e-8, verbose=False)
+            config=TTVolterraFullConfig(max_iter=50, tol=1e-8, verbose=False),
         )
         model.fit(x, y)
 
@@ -112,7 +96,7 @@ class TestTTVolterraMIMOFitting:
 
         # Check fit quality
         diag = model.diagnostics()
-        assert diag['final_loss'] < 1e-8
+        assert diag["final_loss"] < 1e-8
 
     def test_fit_siso_quadratic(self):
         """Fit SISO quadratic system with ranks > 1."""
@@ -122,16 +106,16 @@ class TestTTVolterraMIMOFitting:
         M = 2
 
         x = np.random.randn(500) * 0.5
-        y_valid = x[N-1:] + 0.1 * x[N-1:]**2
+        y_valid = x[N - 1 :] + 0.1 * x[N - 1 :] ** 2
         # Pad y to match x length
-        y = np.concatenate([np.zeros(N-1), y_valid])
+        y = np.concatenate([np.zeros(N - 1), y_valid])
 
         # Fit with rank-2
         model = TTVolterraMIMO(
             memory_length=N,
             order=M,
             ranks=[1, 2, 1],
-            config=TTVolterraFullConfig(max_iter=100, tol=1e-6, verbose=False)
+            config=TTVolterraFullConfig(max_iter=100, tol=1e-6, verbose=False),
         )
         model.fit(x, y)
 
@@ -141,8 +125,8 @@ class TestTTVolterraMIMOFitting:
 
         # Should converge or achieve reasonable fit
         diag = model.diagnostics()
-        assert diag['iterations'] > 0
-        assert diag['final_loss'] < 1.0
+        assert diag["iterations"] > 0
+        assert diag["final_loss"] < 1.0
 
     def test_fit_mimo_two_inputs(self):
         """Fit MIMO system with 2 inputs."""
@@ -158,18 +142,19 @@ class TestTTVolterraMIMOFitting:
 
         x = np.random.randn(500, I)
         from volterra.tt.tt_als_mimo import build_mimo_delay_matrix
+
         X_delay = build_mimo_delay_matrix(x, N)
 
         y_valid = X_delay[:, :N] @ h1 + X_delay[:, N:] @ h2
         # Pad y to match x length
-        y = np.concatenate([np.zeros(N-1), y_valid])
+        y = np.concatenate([np.zeros(N - 1), y_valid])
 
         # Fit
         model = TTVolterraMIMO(
             memory_length=N,
             order=M,
             ranks=[1, 1],
-            config=TTVolterraFullConfig(max_iter=100, tol=1e-8, verbose=False)
+            config=TTVolterraFullConfig(max_iter=100, tol=1e-8, verbose=False),
         )
         model.fit(x, y)
 
@@ -179,7 +164,7 @@ class TestTTVolterraMIMOFitting:
 
         # Check fit quality
         diag = model.diagnostics()
-        assert diag['final_loss'] < 1e-6
+        assert diag["final_loss"] < 1e-6
 
     def test_fit_multi_output(self):
         """Fit system with multiple outputs."""
@@ -189,16 +174,15 @@ class TestTTVolterraMIMOFitting:
         M = 1
 
         x = np.random.randn(200)
-        y = np.column_stack([
-            np.random.randn(200) * 0.5,  # Output 1
-            np.random.randn(200) * 0.3   # Output 2
-        ])
+        y = np.column_stack(
+            [np.random.randn(200) * 0.5, np.random.randn(200) * 0.3]  # Output 1  # Output 2
+        )
 
         model = TTVolterraMIMO(
             memory_length=N,
             order=M,
             ranks=[1, 1],
-            config=TTVolterraFullConfig(max_iter=50, verbose=False)
+            config=TTVolterraFullConfig(max_iter=50, verbose=False),
         )
         model.fit(x, y)
 
@@ -366,7 +350,7 @@ class TestTTVolterraMIMOAccessors:
             memory_length=5,
             order=2,
             ranks=[1, 2, 1],
-            config=TTVolterraFullConfig(max_iter=20, verbose=False)
+            config=TTVolterraFullConfig(max_iter=20, verbose=False),
         )
         x = np.random.randn(100)
         y = np.random.randn(100)
@@ -374,17 +358,17 @@ class TestTTVolterraMIMOAccessors:
 
         diag = model.diagnostics()
 
-        assert 'loss_history' in diag
-        assert 'converged' in diag
-        assert 'final_loss' in diag
-        assert 'iterations' in diag
-        assert 'ranks' in diag
-        assert 'total_parameters' in diag
+        assert "loss_history" in diag
+        assert "converged" in diag
+        assert "final_loss" in diag
+        assert "iterations" in diag
+        assert "ranks" in diag
+        assert "total_parameters" in diag
 
-        assert isinstance(diag['loss_history'], list)
-        assert len(diag['loss_history']) > 0
-        assert diag['iterations'] <= 20
-        assert diag['ranks'] == [1, 2, 1]
+        assert isinstance(diag["loss_history"], list)
+        assert len(diag["loss_history"]) > 0
+        assert diag["iterations"] <= 20
+        assert diag["ranks"] == [1, 2, 1]
 
     def test_diagnostics_before_fit_raises(self):
         """diagnostics before fit should raise."""
@@ -404,18 +388,18 @@ class TestTTVolterraMIMOAccessors:
 
         export = model.export_model()
 
-        assert 'cores' in export
-        assert 'ranks' in export
-        assert 'memory_length' in export
-        assert 'order' in export
-        assert 'n_inputs' in export
-        assert 'metadata' in export
+        assert "cores" in export
+        assert "ranks" in export
+        assert "memory_length" in export
+        assert "order" in export
+        assert "n_inputs" in export
+        assert "metadata" in export
 
-        assert export['memory_length'] == 5
-        assert export['order'] == 2
-        assert export['ranks'] == [1, 2, 1]
-        assert export['n_inputs'] == 1
-        assert len(export['cores']) == 2
+        assert export["memory_length"] == 5
+        assert export["order"] == 2
+        assert export["ranks"] == [1, 2, 1]
+        assert export["n_inputs"] == 1
+        assert len(export["cores"]) == 2
 
     def test_export_model_before_fit_raises(self):
         """export_model before fit should raise."""
@@ -508,13 +492,14 @@ class TestTTVolterraMIMOIntegration:
         # Generate data
         x = np.random.randn(500) * 0.5
         from volterra.tt.tt_als_mimo import build_mimo_delay_matrix
+
         X_delay = build_mimo_delay_matrix(x, N)
         h1 = np.random.randn(N) * 0.8
         h2 = np.random.randn(N) * 0.15
-        y_valid = X_delay @ h1 + (X_delay ** 2) @ h2
+        y_valid = X_delay @ h1 + (X_delay**2) @ h2
 
         # Pad y to match x length
-        y = np.concatenate([np.zeros(N-1), y_valid])
+        y = np.concatenate([np.zeros(N - 1), y_valid])
 
         # Split train/test
         x_train, x_test = x[:400], x[400:]
@@ -525,7 +510,7 @@ class TestTTVolterraMIMOIntegration:
             memory_length=N,
             order=M,
             ranks=[1, 1, 1],
-            config=TTVolterraFullConfig(max_iter=100, tol=1e-8, verbose=False)
+            config=TTVolterraFullConfig(max_iter=100, tol=1e-8, verbose=False),
         )
         model.fit(x_train, y_train)
 
@@ -546,6 +531,7 @@ class TestTTVolterraMIMOIntegration:
         # Generate MIMO data
         x = np.random.randn(500, I) * 0.5
         from volterra.tt.tt_als_mimo import build_mimo_delay_matrix
+
         X_delay = build_mimo_delay_matrix(x, N)
 
         h1 = np.random.randn(N) * 0.7
@@ -553,7 +539,7 @@ class TestTTVolterraMIMOIntegration:
         y_valid = X_delay[:, :N] @ h1 + X_delay[:, N:] @ h2
 
         # Pad y to match x length
-        y = np.concatenate([np.zeros(N-1), y_valid])
+        y = np.concatenate([np.zeros(N - 1), y_valid])
 
         # Split
         x_train, x_test = x[:400], x[400:]
@@ -564,7 +550,7 @@ class TestTTVolterraMIMOIntegration:
             memory_length=N,
             order=M,
             ranks=[1, 1],
-            config=TTVolterraFullConfig(max_iter=100, tol=1e-8, verbose=False)
+            config=TTVolterraFullConfig(max_iter=100, tol=1e-8, verbose=False),
         )
         model.fit(x_train, y_train)
 

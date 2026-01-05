@@ -7,6 +7,7 @@ It includes diagonal terms plus selective cross-memory terms.
 
 import numpy as np
 import pytest
+
 from volterra.models.gmp import (
     GeneralizedMemoryPolynomial,
     GMPConfig,
@@ -26,16 +27,8 @@ class TestGMPInitialization:
 
     def test_init_with_config(self):
         """Initialize with custom configuration."""
-        config = GMPConfig(
-            max_cross_lag_distance=2,
-            max_cross_order=3,
-            regularization=1e-6
-        )
-        model = GeneralizedMemoryPolynomial(
-            memory_length=10,
-            order=5,
-            config=config
-        )
+        config = GMPConfig(max_cross_lag_distance=2, max_cross_order=3, regularization=1e-6)
+        model = GeneralizedMemoryPolynomial(memory_length=10, order=5, config=config)
         assert model.config.max_cross_lag_distance == 2
         assert model.config.max_cross_order == 3
         assert model.config.regularization == 1e-6
@@ -69,25 +62,14 @@ class TestGMPInitialization:
     def test_total_terms_diagonal_only(self):
         """Count terms correctly for diagonal-only (no cross-terms)."""
         config = GMPConfig(max_cross_lag_distance=0)
-        model = GeneralizedMemoryPolynomial(
-            memory_length=5,
-            order=3,
-            config=config
-        )
+        model = GeneralizedMemoryPolynomial(memory_length=5, order=3, config=config)
         # Diagonal terms: N * M = 5 * 3 = 15
         assert model.total_terms == 15
 
     def test_total_terms_with_cross_terms(self):
         """Count terms correctly with cross-terms enabled."""
-        config = GMPConfig(
-            max_cross_lag_distance=2,
-            max_cross_order=2
-        )
-        model = GeneralizedMemoryPolynomial(
-            memory_length=5,
-            order=3,
-            config=config
-        )
+        config = GMPConfig(max_cross_lag_distance=2, max_cross_order=2)
+        model = GeneralizedMemoryPolynomial(memory_length=5, order=3, config=config)
         # Should have more terms than diagonal-only
         assert model.total_terms > 15
 
@@ -103,16 +85,12 @@ class TestGMPFitting:
 
         # Generate test data
         x = np.random.randn(500)
-        y_valid = np.convolve(x, h_true, mode='valid')
-        y = np.concatenate([np.zeros(N-1), y_valid])
+        y_valid = np.convolve(x, h_true, mode="valid")
+        y = np.concatenate([np.zeros(N - 1), y_valid])
 
         # Fit diagonal-only GMP (equivalent to MP)
         config = GMPConfig(max_cross_lag_distance=0)
-        model = GeneralizedMemoryPolynomial(
-            memory_length=N,
-            order=1,
-            config=config
-        )
+        model = GeneralizedMemoryPolynomial(memory_length=N, order=1, config=config)
         model.fit(x, y)
 
         assert model.is_fitted
@@ -132,17 +110,14 @@ class TestGMPFitting:
         # Generate test data: y = h1 * x + h2 * x^2
         x = np.random.randn(500)
         from volterra.tt.tt_als_mimo import build_mimo_delay_matrix
+
         X_delay = build_mimo_delay_matrix(x, N)
-        y_valid = X_delay @ h1 + (X_delay ** 2) @ h2
-        y = np.concatenate([np.zeros(N-1), y_valid])
+        y_valid = X_delay @ h1 + (X_delay**2) @ h2
+        y = np.concatenate([np.zeros(N - 1), y_valid])
 
         # Fit diagonal GMP with order 2
         config = GMPConfig(max_cross_lag_distance=0)
-        model = GeneralizedMemoryPolynomial(
-            memory_length=N,
-            order=2,
-            config=config
-        )
+        model = GeneralizedMemoryPolynomial(memory_length=N, order=2, config=config)
         model.fit(x, y)
 
         assert model.is_fitted
@@ -161,29 +136,18 @@ class TestGMPFitting:
         x = np.random.randn(500)
         y = np.zeros_like(x)
         for t in range(2, len(x)):
-            y[t] = x[t] + 0.3 * x[t-1] * x[t-2]
+            y[t] = x[t] + 0.3 * x[t - 1] * x[t - 2]
 
         # Fit diagonal-only model
         config_diag = GMPConfig(max_cross_lag_distance=0)
-        model_diag = GeneralizedMemoryPolynomial(
-            memory_length=N,
-            order=2,
-            config=config_diag
-        )
+        model_diag = GeneralizedMemoryPolynomial(memory_length=N, order=2, config=config_diag)
         model_diag.fit(x, y)
         y_pred_diag = model_diag.predict(x)
         nmse_diag = np.mean((y - y_pred_diag) ** 2) / np.var(y)
 
         # Fit with cross-terms
-        config_cross = GMPConfig(
-            max_cross_lag_distance=3,
-            max_cross_order=2
-        )
-        model_cross = GeneralizedMemoryPolynomial(
-            memory_length=N,
-            order=2,
-            config=config_cross
-        )
+        config_cross = GMPConfig(max_cross_lag_distance=3, max_cross_order=2)
+        model_cross = GeneralizedMemoryPolynomial(memory_length=N, order=2, config=config_cross)
         model_cross.fit(x, y)
         y_pred_cross = model_cross.predict(x)
         nmse_cross = np.mean((y - y_pred_cross) ** 2) / np.var(y)
@@ -202,18 +166,15 @@ class TestGMPFitting:
         # Generate MIMO data
         x = np.random.randn(500, 2)
         from volterra.tt.tt_als_mimo import build_mimo_delay_matrix
+
         X1_delay = build_mimo_delay_matrix(x[:, 0], N)
         X2_delay = build_mimo_delay_matrix(x[:, 1], N)
         y_valid = X1_delay @ h1 + X2_delay @ h2
-        y = np.concatenate([np.zeros(N-1), y_valid])
+        y = np.concatenate([np.zeros(N - 1), y_valid])
 
         # Fit GMP
         config = GMPConfig(max_cross_lag_distance=0)
-        model = GeneralizedMemoryPolynomial(
-            memory_length=N,
-            order=1,
-            config=config
-        )
+        model = GeneralizedMemoryPolynomial(memory_length=N, order=1, config=config)
         model.fit(x, y)
 
         assert model.is_fitted
@@ -229,23 +190,22 @@ class TestGMPFitting:
 
         x = np.random.randn(200)
         from volterra.tt.tt_als_mimo import build_mimo_delay_matrix
+
         X_delay = build_mimo_delay_matrix(x, N)
 
         h1 = np.random.randn(N) * 0.5
         h2 = np.random.randn(N) * 0.3
         y1_valid = X_delay @ h1
         y2_valid = X_delay @ h2
-        y = np.column_stack([
-            np.concatenate([np.zeros(N-1), y1_valid]),
-            np.concatenate([np.zeros(N-1), y2_valid])
-        ])
+        y = np.column_stack(
+            [
+                np.concatenate([np.zeros(N - 1), y1_valid]),
+                np.concatenate([np.zeros(N - 1), y2_valid]),
+            ]
+        )
 
         config = GMPConfig(max_cross_lag_distance=0)
-        model = GeneralizedMemoryPolynomial(
-            memory_length=N,
-            order=1,
-            config=config
-        )
+        model = GeneralizedMemoryPolynomial(memory_length=N, order=1, config=config)
         model.fit(x, y)
 
         assert model.is_fitted
@@ -369,22 +329,20 @@ class TestGMPAccessors:
         y = np.random.randn(200)
 
         config = GMPConfig(max_cross_lag_distance=2, max_cross_order=2)
-        model = GeneralizedMemoryPolynomial(
-            memory_length=5,
-            order=2,
-            config=config
-        )
+        model = GeneralizedMemoryPolynomial(memory_length=5, order=2, config=config)
         model.fit(x, y)
 
         coeffs = model.get_coefficients()
 
-        assert 'diagonal' in coeffs
-        assert isinstance(coeffs['diagonal'], np.ndarray)
+        assert "diagonal" in coeffs
+        assert isinstance(coeffs["diagonal"], np.ndarray)
 
         # If cross-terms enabled, should have cross-term coefficients
         if config.max_cross_lag_distance > 0:
-            assert 'cross_terms' in coeffs
-            assert isinstance(coeffs['cross_terms'], list) or isinstance(coeffs['cross_terms'], np.ndarray)
+            assert "cross_terms" in coeffs
+            assert isinstance(coeffs["cross_terms"], list) or isinstance(
+                coeffs["cross_terms"], np.ndarray
+            )
 
     def test_get_coefficients_multi_output(self):
         """Get coefficients for specific output channel."""
@@ -399,7 +357,7 @@ class TestGMPAccessors:
         coeffs_1 = model.get_coefficients(output_idx=1)
 
         # Should be different for different outputs
-        assert not np.allclose(coeffs_0['diagonal'], coeffs_1['diagonal'])
+        assert not np.allclose(coeffs_0["diagonal"], coeffs_1["diagonal"])
 
     def test_export_model_structure(self):
         """Export should provide complete model description."""
@@ -408,24 +366,20 @@ class TestGMPAccessors:
         y = np.random.randn(200)
 
         config = GMPConfig(max_cross_lag_distance=1)
-        model = GeneralizedMemoryPolynomial(
-            memory_length=5,
-            order=3,
-            config=config
-        )
+        model = GeneralizedMemoryPolynomial(memory_length=5, order=3, config=config)
         model.fit(x, y)
 
         export = model.export_model()
 
         # Check required fields
-        assert 'model_type' in export
-        assert export['model_type'] == 'GMP'
-        assert 'memory_length' in export
-        assert 'order' in export
-        assert 'coefficients' in export
-        assert 'config' in export
-        assert export['memory_length'] == 5
-        assert export['order'] == 3
+        assert "model_type" in export
+        assert export["model_type"] == "GMP"
+        assert "memory_length" in export
+        assert "order" in export
+        assert "coefficients" in export
+        assert "config" in export
+        assert export["memory_length"] == 5
+        assert export["order"] == 3
 
     def test_export_model_invalid_output_idx(self):
         """Export with invalid output index should raise."""
@@ -446,17 +400,13 @@ class TestGMPProperties:
     def test_repr(self):
         """String representation should be informative."""
         config = GMPConfig(max_cross_lag_distance=2)
-        model = GeneralizedMemoryPolynomial(
-            memory_length=10,
-            order=3,
-            config=config
-        )
+        model = GeneralizedMemoryPolynomial(memory_length=10, order=3, config=config)
 
         repr_str = repr(model)
-        assert 'GeneralizedMemoryPolynomial' in repr_str
-        assert 'memory_length=10' in repr_str
-        assert 'order=3' in repr_str
-        assert 'fitted=False' in repr_str
+        assert "GeneralizedMemoryPolynomial" in repr_str
+        assert "memory_length=10" in repr_str
+        assert "order=3" in repr_str
+        assert "fitted=False" in repr_str
 
     def test_repr_after_fit(self):
         """String representation should update after fit."""
@@ -468,7 +418,7 @@ class TestGMPProperties:
         model.fit(x, y)
 
         repr_str = repr(model)
-        assert 'fitted=True' in repr_str
+        assert "fitted=True" in repr_str
 
     def test_n_inputs_property(self):
         """n_inputs should reflect input dimensionality."""
@@ -508,11 +458,7 @@ class TestGMPProperties:
     def test_total_terms_property(self):
         """total_terms should count all terms correctly."""
         config = GMPConfig(max_cross_lag_distance=0)
-        model = GeneralizedMemoryPolynomial(
-            memory_length=5,
-            order=3,
-            config=config
-        )
+        model = GeneralizedMemoryPolynomial(memory_length=5, order=3, config=config)
 
         # Diagonal only: N * M = 15
         assert model.total_terms == 15
@@ -520,19 +466,11 @@ class TestGMPProperties:
     def test_is_diagonal_property(self):
         """is_diagonal should indicate if only diagonal terms present."""
         config_diag = GMPConfig(max_cross_lag_distance=0)
-        model_diag = GeneralizedMemoryPolynomial(
-            memory_length=5,
-            order=3,
-            config=config_diag
-        )
+        model_diag = GeneralizedMemoryPolynomial(memory_length=5, order=3, config=config_diag)
         assert model_diag.is_diagonal
 
         config_cross = GMPConfig(max_cross_lag_distance=2)
-        model_cross = GeneralizedMemoryPolynomial(
-            memory_length=5,
-            order=3,
-            config=config_cross
-        )
+        model_cross = GeneralizedMemoryPolynomial(memory_length=5, order=3, config=config_cross)
         assert not model_cross.is_diagonal
 
 
@@ -550,29 +488,22 @@ class TestGMPIntegration:
 
         # True system: diagonal + one cross-term
         from volterra.tt.tt_als_mimo import build_mimo_delay_matrix
+
         X_delay = build_mimo_delay_matrix(x_train, N)
         h1 = np.random.randn(N) * 0.5
         h2 = np.random.randn(N) * 0.1
         h3 = np.random.randn(N) * 0.03
-        y_valid = X_delay @ h1 + (X_delay ** 2) @ h2 + (X_delay ** 3) @ h3
+        y_valid = X_delay @ h1 + (X_delay**2) @ h2 + (X_delay**3) @ h3
 
         # Add cross-term: x(t-1) * x(t-3)
         for t in range(3, len(X_delay)):
             y_valid[t] += 0.2 * X_delay[t, 1] * X_delay[t, 3]
 
-        y_train = np.concatenate([np.zeros(N-1), y_valid])
+        y_train = np.concatenate([np.zeros(N - 1), y_valid])
 
         # Fit GMP with cross-terms
-        config = GMPConfig(
-            max_cross_lag_distance=3,
-            max_cross_order=2,
-            regularization=1e-6
-        )
-        model = GeneralizedMemoryPolynomial(
-            memory_length=N,
-            order=M,
-            config=config
-        )
+        config = GMPConfig(max_cross_lag_distance=3, max_cross_order=2, regularization=1e-6)
+        model = GeneralizedMemoryPolynomial(memory_length=N, order=M, config=config)
         model.fit(x_train, y_train)
 
         # Predict on new data
@@ -582,9 +513,9 @@ class TestGMPIntegration:
 
         # Export model
         export = model.export_model()
-        assert export['model_type'] == 'GMP'
-        assert export['memory_length'] == N
-        assert export['order'] == M
+        assert export["model_type"] == "GMP"
+        assert export["memory_length"] == N
+        assert export["order"] == M
 
     def test_complete_workflow_mimo(self):
         """Complete workflow for MIMO system."""
@@ -599,21 +530,18 @@ class TestGMPIntegration:
 
         # Simple additive MIMO model
         from volterra.tt.tt_als_mimo import build_mimo_delay_matrix
+
         y_valid = np.zeros(800 - N + 1)
         for i in range(I):
             X_delay = build_mimo_delay_matrix(x_train[:, i], N)
             h = np.random.randn(N) * 0.3
             y_valid += X_delay @ h
 
-        y_train = np.concatenate([np.zeros(N-1), y_valid])
+        y_train = np.concatenate([np.zeros(N - 1), y_valid])
 
         # Fit GMP
         config = GMPConfig(max_cross_lag_distance=0)  # Diagonal only for simplicity
-        model = GeneralizedMemoryPolynomial(
-            memory_length=N,
-            order=M,
-            config=config
-        )
+        model = GeneralizedMemoryPolynomial(memory_length=N, order=M, config=config)
         model.fit(x_train, y_train)
 
         # Predict

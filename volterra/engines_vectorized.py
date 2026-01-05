@@ -16,7 +16,8 @@ Targets:
 
 import numpy as np
 from scipy.signal import fftconvolve
-from volterra.kernels_full import VolterraKernelFull, ArrayF
+
+from volterra.kernels_full import ArrayF, VolterraKernelFull
 
 
 class VectorizedEngine:
@@ -52,10 +53,7 @@ class VectorizedEngine:
         }
 
     def process_block(
-        self,
-        x_block: ArrayF,
-        x_history: ArrayF,
-        kernel: VolterraKernelFull
+        self, x_block: ArrayF, x_history: ArrayF, kernel: VolterraKernelFull
     ) -> ArrayF:
         """
         Process block with fully vectorized operations.
@@ -74,10 +72,7 @@ class VectorizedEngine:
         N = kernel.N
 
         # Build extended signal (C-contiguous)
-        x_ext = np.ascontiguousarray(
-            np.concatenate([x_history, x_block]),
-            dtype=np.float64
-        )
+        x_ext = np.ascontiguousarray(np.concatenate([x_history, x_block]), dtype=np.float64)
 
         # Zero output buffer in-place
         y = self._y_buffer[:B]
@@ -116,35 +111,28 @@ class VectorizedEngine:
 
         # Compute chain with in-place operations
         if max_order >= 2:
-            x2 = self._power_buffers[2][:len(x)]
+            x2 = self._power_buffers[2][: len(x)]
             np.multiply(x, x, out=x2)
             powers[2] = x2
 
         if max_order >= 3:
-            x3 = self._power_buffers[3][:len(x)]
+            x3 = self._power_buffers[3][: len(x)]
             np.multiply(powers[2], x, out=x3)
             powers[3] = x3
 
         if max_order >= 4:
-            x4 = self._power_buffers[4][:len(x)]
+            x4 = self._power_buffers[4][: len(x)]
             np.multiply(powers[2], powers[2], out=x4)
             powers[4] = x4
 
         if max_order >= 5:
-            x5 = self._power_buffers[5][:len(x)]
+            x5 = self._power_buffers[5][: len(x)]
             np.multiply(powers[4], x, out=x5)
             powers[5] = x5
 
         return powers
 
-    def _accumulate_convolution(
-        self,
-        y: ArrayF,
-        x_pow: ArrayF,
-        h: ArrayF,
-        B: int,
-        N: int
-    ):
+    def _accumulate_convolution(self, y: ArrayF, x_pow: ArrayF, h: ArrayF, B: int, N: int):
         """
         Accumulate convolution result in-place.
 
@@ -159,11 +147,11 @@ class VectorizedEngine:
             N: Kernel length
         """
         # Vectorized convolution (no loops!)
-        conv_full = fftconvolve(x_pow, h, mode='full')
+        conv_full = fftconvolve(x_pow, h, mode="full")
 
         # Extract valid region (overlap-add)
         start = N - 1
-        conv_valid = conv_full[start:start+B]
+        conv_valid = conv_full[start : start + B]
 
         # In-place accumulation
         np.add(y, conv_valid, out=y)

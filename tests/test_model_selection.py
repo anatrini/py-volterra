@@ -4,9 +4,10 @@ Tests for automatic model selection between MP, GMP, and TT-Volterra.
 
 import numpy as np
 import pytest
+
 from volterra.model_selection import (
-    ModelSelector,
     ModelSelectionConfig,
+    ModelSelector,
 )
 
 
@@ -28,7 +29,7 @@ class TestModelSelectionConfig:
             validation_split=0.3,
             try_diagonal=True,
             try_gmp=True,
-            try_tt_full=True
+            try_tt_full=True,
         )
         assert config.memory_length == 10
         assert config.order == 5
@@ -58,11 +59,7 @@ class TestModelSelectionConfig:
     def test_config_must_try_at_least_one_model(self):
         """At least one model type must be enabled."""
         with pytest.raises(ValueError, match="At least one model type must be enabled"):
-            ModelSelectionConfig(
-                try_diagonal=False,
-                try_gmp=False,
-                try_tt_full=False
-            )
+            ModelSelectionConfig(try_diagonal=False, try_gmp=False, try_tt_full=False)
 
 
 class TestModelSelectorInitialization:
@@ -99,22 +96,18 @@ class TestModelSelectorFitting:
 
         # Generate linear system
         x = np.random.randn(500)
-        y_valid = np.convolve(x, h_true, mode='valid')
-        y = np.concatenate([np.zeros(N-1), y_valid])
+        y_valid = np.convolve(x, h_true, mode="valid")
+        y = np.concatenate([np.zeros(N - 1), y_valid])
 
         # Fit with model selection
         config = ModelSelectionConfig(
-            memory_length=N,
-            order=1,
-            try_diagonal=True,
-            try_gmp=False,
-            try_tt_full=False
+            memory_length=N, order=1, try_diagonal=True, try_gmp=False, try_tt_full=False
         )
         selector = ModelSelector(config=config)
         selector.fit(x, y)
 
         assert selector.is_fitted
-        assert selector.selected_model_type == 'Diagonal-MP'
+        assert selector.selected_model_type == "Diagonal-MP"
 
     def test_fit_quadratic_system_diagonal_sufficient(self):
         """Diagonal MP should handle purely diagonal nonlinearity."""
@@ -126,24 +119,21 @@ class TestModelSelectorFitting:
         # Generate diagonal quadratic system
         x = np.random.randn(500)
         from volterra.tt.tt_als_mimo import build_mimo_delay_matrix
+
         X_delay = build_mimo_delay_matrix(x, N)
-        y_valid = X_delay @ h1 + (X_delay ** 2) @ h2
-        y = np.concatenate([np.zeros(N-1), y_valid])
+        y_valid = X_delay @ h1 + (X_delay**2) @ h2
+        y = np.concatenate([np.zeros(N - 1), y_valid])
 
         # Fit with model selection
         config = ModelSelectionConfig(
-            memory_length=N,
-            order=2,
-            try_diagonal=True,
-            try_gmp=True,
-            try_tt_full=False
+            memory_length=N, order=2, try_diagonal=True, try_gmp=True, try_tt_full=False
         )
         selector = ModelSelector(config=config)
         selector.fit(x, y)
 
         assert selector.is_fitted
         # Should select diagonal since GMP adds unnecessary complexity
-        assert selector.selected_model_type in ['Diagonal-MP', 'GMP']
+        assert selector.selected_model_type in ["Diagonal-MP", "GMP"]
 
     def test_fit_cross_memory_system_selects_gmp(self):
         """System with cross-memory terms should prefer GMP."""
@@ -154,7 +144,7 @@ class TestModelSelectorFitting:
         x = np.random.randn(500)
         y = np.zeros_like(x)
         for t in range(2, len(x)):
-            y[t] = x[t] + 0.4 * x[t-1] * x[t-2]
+            y[t] = x[t] + 0.4 * x[t - 1] * x[t - 2]
 
         # Fit with model selection
         config = ModelSelectionConfig(
@@ -163,14 +153,14 @@ class TestModelSelectorFitting:
             try_diagonal=True,
             try_gmp=True,
             try_tt_full=False,
-            gmp_max_cross_lag=3
+            gmp_max_cross_lag=3,
         )
         selector = ModelSelector(config=config)
         selector.fit(x, y)
 
         assert selector.is_fitted
         # GMP should fit significantly better than diagonal
-        assert selector.selected_model_type == 'GMP'
+        assert selector.selected_model_type == "GMP"
 
     def test_fit_with_validation_split(self):
         """Fit using automatic train/validation split."""
@@ -179,10 +169,7 @@ class TestModelSelectorFitting:
         y = np.random.randn(500)
 
         config = ModelSelectionConfig(
-            validation_split=0.2,
-            try_diagonal=True,
-            try_gmp=False,
-            try_tt_full=False
+            validation_split=0.2, try_diagonal=True, try_gmp=False, try_tt_full=False
         )
         selector = ModelSelector(config=config)
         selector.fit(x, y)
@@ -197,11 +184,7 @@ class TestModelSelectorFitting:
         x_val = np.random.randn(100)
         y_val = np.random.randn(100)
 
-        config = ModelSelectionConfig(
-            try_diagonal=True,
-            try_gmp=False,
-            try_tt_full=False
-        )
+        config = ModelSelectionConfig(try_diagonal=True, try_gmp=False, try_tt_full=False)
         selector = ModelSelector(config=config)
         selector.fit(x_train, y_train, x_val=x_val, y_val=y_val)
 
@@ -213,11 +196,7 @@ class TestModelSelectorFitting:
         x_train = np.random.randn(500, 2)
         y_train = np.random.randn(500)
 
-        config = ModelSelectionConfig(
-            try_diagonal=True,
-            try_gmp=False,
-            try_tt_full=False
-        )
+        config = ModelSelectionConfig(try_diagonal=True, try_gmp=False, try_tt_full=False)
         selector = ModelSelector(config=config)
         selector.fit(x_train, y_train)
 
@@ -229,11 +208,7 @@ class TestModelSelectorFitting:
         x_train = np.random.randn(500)
         y_train = np.random.randn(500, 2)
 
-        config = ModelSelectionConfig(
-            try_diagonal=True,
-            try_gmp=False,
-            try_tt_full=False
-        )
+        config = ModelSelectionConfig(try_diagonal=True, try_gmp=False, try_tt_full=False)
         selector = ModelSelector(config=config)
         selector.fit(x_train, y_train)
 
@@ -308,7 +283,7 @@ class TestModelSelectorAccessors:
 
         model = selector.get_selected_model()
         assert model is not None
-        assert hasattr(model, 'predict')
+        assert hasattr(model, "predict")
 
     def test_get_all_results(self):
         """Get results for all tried models."""
@@ -316,19 +291,15 @@ class TestModelSelectorAccessors:
         x = np.random.randn(400)
         y = np.random.randn(400)
 
-        config = ModelSelectionConfig(
-            try_diagonal=True,
-            try_gmp=True,
-            try_tt_full=False
-        )
+        config = ModelSelectionConfig(try_diagonal=True, try_gmp=True, try_tt_full=False)
         selector = ModelSelector(config=config)
         selector.fit(x, y)
 
         results = selector.get_all_results()
         assert isinstance(results, dict)
-        assert 'Diagonal-MP' in results
+        assert "Diagonal-MP" in results
         if config.try_gmp:
-            assert 'GMP' in results
+            assert "GMP" in results
 
     def test_explain_returns_string(self):
         """Explain returns informative string."""
@@ -342,7 +313,7 @@ class TestModelSelectorAccessors:
         explanation = selector.explain()
         assert isinstance(explanation, str)
         assert len(explanation) > 0
-        assert 'Selected' in explanation or 'selected' in explanation
+        assert "Selected" in explanation or "selected" in explanation
 
     def test_explain_includes_metrics(self):
         """Explain includes validation metrics."""
@@ -355,7 +326,7 @@ class TestModelSelectorAccessors:
 
         explanation = selector.explain()
         # Should mention at least one metric
-        assert 'NMSE' in explanation or 'AIC' in explanation or 'BIC' in explanation
+        assert "NMSE" in explanation or "AIC" in explanation or "BIC" in explanation
 
     def test_explain_before_fit_raises(self):
         """Explain before fit should raise."""
@@ -386,15 +357,11 @@ class TestModelSelectorProperties:
         x = np.random.randn(400)
         y = np.random.randn(400)
 
-        config = ModelSelectionConfig(
-            try_diagonal=True,
-            try_gmp=False,
-            try_tt_full=False
-        )
+        config = ModelSelectionConfig(try_diagonal=True, try_gmp=False, try_tt_full=False)
         selector = ModelSelector(config=config)
         selector.fit(x, y)
 
-        assert selector.selected_model_type == 'Diagonal-MP'
+        assert selector.selected_model_type == "Diagonal-MP"
 
     def test_selected_model_type_before_fit_raises(self):
         """selected_model_type before fit should raise."""
@@ -407,8 +374,8 @@ class TestModelSelectorProperties:
         """String representation is informative."""
         selector = ModelSelector()
         repr_str = repr(selector)
-        assert 'ModelSelector' in repr_str
-        assert 'fitted=False' in repr_str
+        assert "ModelSelector" in repr_str
+        assert "fitted=False" in repr_str
 
     def test_repr_after_fit(self):
         """String representation updates after fit."""
@@ -420,7 +387,7 @@ class TestModelSelectorProperties:
         selector.fit(x, y)
 
         repr_str = repr(selector)
-        assert 'fitted=True' in repr_str
+        assert "fitted=True" in repr_str
 
 
 class TestModelSelectorMetrics:
@@ -432,19 +399,15 @@ class TestModelSelectorMetrics:
         x = np.random.randn(400)
         y = np.random.randn(400)
 
-        config = ModelSelectionConfig(
-            try_diagonal=True,
-            try_gmp=True,
-            try_tt_full=False
-        )
+        config = ModelSelectionConfig(try_diagonal=True, try_gmp=True, try_tt_full=False)
         selector = ModelSelector(config=config)
         selector.fit(x, y)
 
         results = selector.get_all_results()
         for model_type, metrics in results.items():
-            assert 'nmse' in metrics
-            assert isinstance(metrics['nmse'], float)
-            assert metrics['nmse'] >= 0
+            assert "nmse" in metrics
+            assert isinstance(metrics["nmse"], float)
+            assert metrics["nmse"] >= 0
 
     def test_aic_bic_computed(self):
         """AIC and BIC are computed for all models."""
@@ -457,8 +420,8 @@ class TestModelSelectorMetrics:
 
         results = selector.get_all_results()
         for model_type, metrics in results.items():
-            assert 'aic' in metrics
-            assert 'bic' in metrics
+            assert "aic" in metrics
+            assert "bic" in metrics
 
     def test_best_model_has_lowest_criterion(self):
         """Selected model should have lowest selection criterion."""
@@ -467,10 +430,7 @@ class TestModelSelectorMetrics:
         y = np.random.randn(400)
 
         config = ModelSelectionConfig(
-            selection_criterion='aic',
-            try_diagonal=True,
-            try_gmp=True,
-            try_tt_full=False
+            selection_criterion="aic", try_diagonal=True, try_gmp=True, try_tt_full=False
         )
         selector = ModelSelector(config=config)
         selector.fit(x, y)
@@ -478,10 +438,10 @@ class TestModelSelectorMetrics:
         results = selector.get_all_results()
         selected_type = selector.selected_model_type
 
-        selected_aic = results[selected_type]['aic']
+        selected_aic = results[selected_type]["aic"]
         for model_type, metrics in results.items():
             # Selected model should have lowest or comparable AIC
-            assert selected_aic <= metrics['aic'] + 1e-6  # numerical tolerance
+            assert selected_aic <= metrics["aic"] + 1e-6  # numerical tolerance
 
 
 class TestModelSelectorIntegration:
@@ -498,11 +458,12 @@ class TestModelSelectorIntegration:
 
         # True diagonal system
         from volterra.tt.tt_als_mimo import build_mimo_delay_matrix
+
         X_delay = build_mimo_delay_matrix(x_train, N)
         h1 = np.random.randn(N) * 0.5
         h2 = np.random.randn(N) * 0.1
-        y_valid = X_delay @ h1 + (X_delay ** 2) @ h2
-        y_train = np.concatenate([np.zeros(N-1), y_valid])
+        y_valid = X_delay @ h1 + (X_delay**2) @ h2
+        y_train = np.concatenate([np.zeros(N - 1), y_valid])
 
         # Model selection
         config = ModelSelectionConfig(
@@ -511,7 +472,7 @@ class TestModelSelectorIntegration:
             validation_split=0.2,
             try_diagonal=True,
             try_gmp=True,
-            try_tt_full=False
+            try_tt_full=False,
         )
         selector = ModelSelector(config=config)
         selector.fit(x_train, y_train)
@@ -542,8 +503,8 @@ class TestModelSelectorIntegration:
         h_true = np.random.randn(N) * 0.5
 
         x_train = np.random.randn(600)
-        y_valid = np.convolve(x_train, h_true, mode='valid')
-        y_train = np.concatenate([np.zeros(N-1), y_valid])
+        y_valid = np.convolve(x_train, h_true, mode="valid")
+        y_train = np.concatenate([np.zeros(N - 1), y_valid])
 
         # Add minimal noise
         y_train += np.random.randn(len(y_train)) * 0.01
@@ -554,10 +515,10 @@ class TestModelSelectorIntegration:
             try_diagonal=True,
             try_gmp=True,
             try_tt_full=False,
-            prefer_simpler=True  # Prefer diagonal if comparable
+            prefer_simpler=True,  # Prefer diagonal if comparable
         )
         selector = ModelSelector(config=config)
         selector.fit(x_train, y_train)
 
         # Should select diagonal MP for linear system
-        assert selector.selected_model_type == 'Diagonal-MP'
+        assert selector.selected_model_type == "Diagonal-MP"

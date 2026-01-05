@@ -6,22 +6,21 @@ achieves real-time performance for diagonal kernels up to 5th order.
 """
 
 from dataclasses import dataclass
+
 import numpy as np
-from scipy.signal import lfilter
-from volterra.kernels_full import VolterraKernelFull, ArrayF
+
 from volterra.engines_diagonal import (
-    VolterraFullEngine,
-    DiagonalNumpyEngine,
+    NUMBA_AVAILABLE,
     DiagonalNumbaEngine,
-    NUMBA_AVAILABLE
+    DiagonalNumpyEngine,
+    VolterraFullEngine,
 )
+from volterra.kernels_full import ArrayF, VolterraKernelFull
 
 # Try to import FFT-optimized engines
 try:
-    from volterra.engines_fft import (
-        FFTOptimizedEngine,
-        FFTOptimizedNumbaEngine
-    )
+    from volterra.engines_fft import FFTOptimizedEngine, FFTOptimizedNumbaEngine
+
     FFT_ENGINES_AVAILABLE = True
 except ImportError:
     FFT_ENGINES_AVAILABLE = False
@@ -29,6 +28,7 @@ except ImportError:
 # Try to import vectorized engines
 try:
     from volterra.engines_vectorized import VectorizedEngine
+
     VECTORIZED_ENGINE_AVAILABLE = True
 except ImportError:
     VECTORIZED_ENGINE_AVAILABLE = False
@@ -73,42 +73,42 @@ class VolterraProcessorFull:
             if FFT_ENGINES_AVAILABLE and N >= 128:
                 # Use FFT-optimized engine for long kernels
                 if self.use_numba and NUMBA_AVAILABLE:
-                    print(f"Using FFT+Numba hybrid engine (N={N}, max_order={self.kernel.max_order})")
+                    print(
+                        f"Using FFT+Numba hybrid engine (N={N}, max_order={self.kernel.max_order})"
+                    )
                     object.__setattr__(
                         self,
-                        'engine',
+                        "engine",
                         FFTOptimizedNumbaEngine(
-                            self.kernel,
-                            fft_threshold=128,
-                            max_block_size=4096
-                        )
+                            self.kernel, fft_threshold=128, max_block_size=4096
+                        ),
                     )
                 else:
                     print(f"Using FFT-optimized engine (N={N}, max_order={self.kernel.max_order})")
                     object.__setattr__(
                         self,
-                        'engine',
-                        FFTOptimizedEngine(
-                            self.kernel,
-                            fft_threshold=128,
-                            max_block_size=4096
-                        )
+                        "engine",
+                        FFTOptimizedEngine(self.kernel, fft_threshold=128, max_block_size=4096),
                     )
             else:
                 # Use time-domain engine for short kernels
                 if self.use_numba and NUMBA_AVAILABLE:
-                    print(f"Using Numba time-domain engine (N={N}, max_order={self.kernel.max_order})")
-                    object.__setattr__(self, 'engine', DiagonalNumbaEngine())
+                    print(
+                        f"Using Numba time-domain engine (N={N}, max_order={self.kernel.max_order})"
+                    )
+                    object.__setattr__(self, "engine", DiagonalNumbaEngine())
                 else:
                     # Prefer vectorized engine (NO Python loops) over DiagonalNumpyEngine
                     if VECTORIZED_ENGINE_AVAILABLE:
                         print(f"Using vectorized engine (N={N}, max_order={self.kernel.max_order})")
-                        object.__setattr__(self, 'engine', VectorizedEngine(max_block_size=4096))
+                        object.__setattr__(self, "engine", VectorizedEngine(max_block_size=4096))
                     else:
                         if self.use_numba and not NUMBA_AVAILABLE:
                             print("Warning: Numba requested but not available")
-                        print(f"Using NumPy time-domain engine (N={N}, max_order={self.kernel.max_order})")
-                        object.__setattr__(self, 'engine', DiagonalNumpyEngine())
+                        print(
+                            f"Using NumPy time-domain engine (N={N}, max_order={self.kernel.max_order})"
+                        )
+                        object.__setattr__(self, "engine", DiagonalNumpyEngine())
 
         # Estimate memory
         mem_kb = self.kernel.estimate_memory_bytes() / 1024
@@ -119,10 +119,10 @@ class VolterraProcessorFull:
     def reset(self):
         """Reset processor state."""
         N = self.kernel.N
-        object.__setattr__(self, '_x_history', np.zeros(N - 1, dtype=np.float64))
+        object.__setattr__(self, "_x_history", np.zeros(N - 1, dtype=np.float64))
 
         # State for linear convolution (scipy.signal.lfilter)
-        object.__setattr__(self, '_zi1', np.zeros(N - 1, dtype=np.float64))
+        object.__setattr__(self, "_zi1", np.zeros(N - 1, dtype=np.float64))
 
     def process_block(self, x_block: ArrayF) -> ArrayF:
         """
@@ -145,11 +145,11 @@ class VolterraProcessorFull:
 
         if B >= N - 1:
             # Block larger than kernel: use last N-1 samples
-            object.__setattr__(self, '_x_history', x_block[-(N-1):].copy())
+            object.__setattr__(self, "_x_history", x_block[-(N - 1) :].copy())
         else:
             # Block smaller than kernel: concatenate and trim
             new_history = np.concatenate([self._x_history, x_block])
-            object.__setattr__(self, '_x_history', new_history[-(N-1):].copy())
+            object.__setattr__(self, "_x_history", new_history[-(N - 1) :].copy())
 
         return y
 
@@ -169,25 +169,25 @@ class VolterraProcessorFull:
         self.reset()
 
         for i in range(0, len(x), block_size):
-            xb = x[i:i+block_size]
+            xb = x[i : i + block_size]
             yb = self.process_block(xb)
-            y[i:i+len(xb)] = yb
+            y[i : i + len(xb)] = yb
 
         return y
 
     def get_info(self) -> dict:
         """Get processor configuration info."""
         return {
-            'kernel_length': self.kernel.N,
-            'max_order': self.kernel.max_order,
-            'sample_rate': self.sample_rate,
-            'engine': self.engine.__class__.__name__,
-            'memory_kb': self.kernel.estimate_memory_bytes() / 1024,
-            'active_kernels': {
-                'h1': True,
-                'h2': self.kernel.h2 is not None,
-                'h3': self.kernel.h3_diagonal is not None,
-                'h4': self.kernel.h4_diagonal is not None,
-                'h5': self.kernel.h5_diagonal is not None,
-            }
+            "kernel_length": self.kernel.N,
+            "max_order": self.kernel.max_order,
+            "sample_rate": self.sample_rate,
+            "engine": self.engine.__class__.__name__,
+            "memory_kb": self.kernel.estimate_memory_bytes() / 1024,
+            "active_kernels": {
+                "h1": True,
+                "h2": self.kernel.h2 is not None,
+                "h3": self.kernel.h3_diagonal is not None,
+                "h4": self.kernel.h4_diagonal is not None,
+                "h5": self.kernel.h5_diagonal is not None,
+            },
         }

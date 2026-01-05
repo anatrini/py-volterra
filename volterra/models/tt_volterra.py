@@ -32,31 +32,29 @@ Typical usage:
     identifier_mimo.fit(x_mimo, y_mimo)  # x: (T, I), y: (T, O)
 """
 
-import numpy as np
-from typing import Optional, List, Tuple, Dict
-from dataclasses import dataclass, field
 import warnings
+from dataclasses import dataclass
 
-from volterra.utils.shapes import (
-    canonicalize_input,
-    canonicalize_output,
-    validate_mimo_data,
-    infer_dimensions,
-)
-from volterra.tt import (
-    TTTensor,
-    tt_als,
-    tt_mals,
-    tt_rls,
-    tt_matvec,
-    TTALSConfig,
-    TTMALSConfig,
-)
+import numpy as np
+
 from volterra.models.tt_predict import (
     predict_diagonal_volterra,
     predict_diagonal_volterra_mimo,
     predict_general_volterra_sliding,
-    predict_with_warmup,
+)
+from volterra.tt import (
+    TTALSConfig,
+    TTMALSConfig,
+    TTTensor,
+    tt_als,
+    tt_mals,
+    tt_rls,
+)
+from volterra.utils.shapes import (
+    canonicalize_input,
+    canonicalize_output,
+    infer_dimensions,
+    validate_mimo_data,
 )
 
 
@@ -89,7 +87,8 @@ class TTVolterraConfig:
         RLS forgetting factor (only for solver='rls'), λ ∈ (0, 1]
         λ = 1: infinite memory, λ < 1: exponential forgetting
     """
-    solver: str = 'als'
+
+    solver: str = "als"
     max_iter: int = 100
     tol: float = 1e-6
     regularization: float = 1e-8
@@ -102,14 +101,15 @@ class TTVolterraConfig:
 
     def __post_init__(self):
         """Validate configuration."""
-        if self.solver not in ('als', 'mals', 'rls'):
+        if self.solver not in ("als", "mals", "rls"):
             raise ValueError(f"Solver must be 'als', 'mals', or 'rls', got '{self.solver}'")
-        if self.rank_adaptation and self.solver != 'mals':
+        if self.rank_adaptation and self.solver != "mals":
             warnings.warn(
                 "rank_adaptation=True requires solver='mals', setting solver='mals'",
-                UserWarning
+                UserWarning,
+                stacklevel=2,
             )
-            self.solver = 'mals'
+            self.solver = "mals"
 
 
 class TTVolterraIdentifier:
@@ -177,8 +177,8 @@ class TTVolterraIdentifier:
         self,
         memory_length: int,
         order: int,
-        ranks: List[int],
-        config: Optional[TTVolterraConfig] = None
+        ranks: list[int],
+        config: TTVolterraConfig | None = None,
     ):
         """
         Initialize TT-Volterra identifier.
@@ -204,13 +204,9 @@ class TTVolterraIdentifier:
         if order < 1:
             raise ValueError(f"order must be >= 1, got {order}")
         if len(ranks) != order + 1:
-            raise ValueError(
-                f"Need {order+1} ranks for order {order}, got {len(ranks)}"
-            )
+            raise ValueError(f"Need {order+1} ranks for order {order}, got {len(ranks)}")
         if ranks[0] != 1 or ranks[-1] != 1:
-            raise ValueError(
-                f"Boundary ranks must be 1, got r_0={ranks[0]}, r_M={ranks[-1]}"
-            )
+            raise ValueError(f"Boundary ranks must be 1, got r_0={ranks[0]}, r_M={ranks[-1]}")
 
         self.memory_length = memory_length
         self.order = order
@@ -218,17 +214,17 @@ class TTVolterraIdentifier:
         self.config = config or TTVolterraConfig()
 
         # Fitted model attributes (set after fit())
-        self.tt_models_: Optional[List[TTTensor]] = None
-        self.fit_info_: Optional[Dict] = None
-        self.n_outputs_: Optional[int] = None
-        self.n_inputs_: Optional[int] = None
+        self.tt_models_: list[TTTensor] | None = None
+        self.fit_info_: dict | None = None
+        self.n_outputs_: int | None = None
+        self.n_inputs_: int | None = None
 
     @property
     def is_fitted(self) -> bool:
         """Whether model has been fitted to data."""
         return self.tt_models_ is not None
 
-    def fit(self, x: np.ndarray, y: np.ndarray) -> 'TTVolterraIdentifier':
+    def fit(self, x: np.ndarray, y: np.ndarray) -> "TTVolterraIdentifier":
         """
         Fit TT-Volterra model to input-output data.
 
@@ -269,7 +265,9 @@ class TTVolterraIdentifier:
         self.n_outputs_ = O
 
         if self.config.verbose:
-            print(f"Fitting TT-Volterra: T={T}, I={I}, O={O}, N={self.memory_length}, M={self.order}")
+            print(
+                f"Fitting TT-Volterra: T={T}, I={I}, O={O}, N={self.memory_length}, M={self.order}"
+            )
 
         # Fit a separate TT model for each output channel
         tt_models = []
@@ -285,7 +283,7 @@ class TTVolterraIdentifier:
             x_o = x_canon if I > 1 else x_canon[:, 0]
 
             # Choose solver
-            if self.config.solver == 'als':
+            if self.config.solver == "als":
                 solver_config = TTALSConfig(
                     max_iter=self.config.max_iter,
                     tol=self.config.tol,
@@ -293,13 +291,9 @@ class TTVolterraIdentifier:
                     verbose=self.config.verbose,
                 )
                 cores, info = tt_als(
-                    x_o, y_o,
-                    self.memory_length,
-                    self.order,
-                    self.ranks,
-                    config=solver_config
+                    x_o, y_o, self.memory_length, self.order, self.ranks, config=solver_config
                 )
-            elif self.config.solver == 'mals':
+            elif self.config.solver == "mals":
                 solver_config = TTMALSConfig(
                     max_iter=self.config.max_iter,
                     tol=self.config.tol,
@@ -310,34 +304,32 @@ class TTVolterraIdentifier:
                     verbose=self.config.verbose,
                 )
                 cores, info = tt_mals(
-                    x_o, y_o,
-                    self.memory_length,
-                    self.order,
-                    self.ranks,
-                    config=solver_config
+                    x_o, y_o, self.memory_length, self.order, self.ranks, config=solver_config
                 )
-            elif self.config.solver == 'rls':
+            elif self.config.solver == "rls":
                 # RLS currently only supports SISO
                 if I > 1:
                     warnings.warn(
                         f"RLS solver currently only supports SISO. Using first input channel from I={I} inputs.",
-                        UserWarning
+                        UserWarning,
+                        stacklevel=2,
                     )
                     x_o = x_canon[:, 0]
                 cores, info = tt_rls(
-                    x_o, y_o,
+                    x_o,
+                    y_o,
                     self.memory_length,
                     self.order,
                     self.ranks,
                     forgetting_factor=self.config.forgetting_factor,
                     regularization=self.config.regularization,
-                    verbose=self.config.verbose
+                    verbose=self.config.verbose,
                 )
             else:
                 raise ValueError(f"Unknown solver: {self.config.solver}")
 
             # Handle MIMO vs SISO cores
-            if info.get('mimo', False):
+            if info.get("mimo", False):
                 # MIMO: cores is List[List[np.ndarray]] (cores_per_input)
                 # Store as-is for now, will handle in predict
                 tt_models.append(cores)  # cores_per_input
@@ -348,9 +340,9 @@ class TTVolterraIdentifier:
 
         self.tt_models_ = tt_models
         self.fit_info_ = {
-            'per_output': fit_infos,
-            'n_outputs': O,
-            'n_inputs': I,
+            "per_output": fit_infos,
+            "n_outputs": O,
+            "n_inputs": I,
         }
 
         return self
@@ -384,16 +376,12 @@ class TTVolterraIdentifier:
         x_canon = canonicalize_input(x)  # (T, I)
         T, I = x_canon.shape
 
-        if I != self.n_inputs_:
-            raise ValueError(
-                f"Input has {I} channels, but model was fitted with {self.n_inputs_}"
-            )
+        if self.n_inputs_ != I:
+            raise ValueError(f"Input has {I} channels, but model was fitted with {self.n_inputs_}")
 
         # Check sufficient samples for memory
-        if T < self.memory_length:
-            raise ValueError(
-                f"Input has {T} samples, but memory_length={self.memory_length}"
-            )
+        if self.memory_length > T:
+            raise ValueError(f"Input has {T} samples, but memory_length={self.memory_length}")
 
         O = self.n_outputs_
         T_valid = T - self.memory_length + 1
@@ -403,7 +391,7 @@ class TTVolterraIdentifier:
         diagonal_mode = all(r == 1 for r in self.ranks)
 
         # Check if MIMO from fit info
-        is_mimo = self.fit_info_['per_output'][0].get('mimo', False)
+        is_mimo = self.fit_info_["per_output"][0].get("mimo", False)
 
         # For each output, use proper sliding-window prediction
         for o in range(O):
@@ -412,9 +400,7 @@ class TTVolterraIdentifier:
             if is_mimo and I > 1:
                 # MIMO: cores_per_input, use all input channels
                 # Note: MIMO always uses diagonal mode (falls back in tt_als if ranks > 1)
-                y_pred[:, o] = predict_diagonal_volterra_mimo(
-                    tt_model, x_canon, self.memory_length
-                )
+                y_pred[:, o] = predict_diagonal_volterra_mimo(tt_model, x_canon, self.memory_length)
             else:
                 # SISO: standard prediction
                 x_o = x_canon[:, 0]  # Extract first channel
@@ -464,9 +450,7 @@ class TTVolterraIdentifier:
             raise ValueError("Model not fitted. Call fit() first.")
 
         if output_idx < 0 or output_idx >= self.n_outputs_:
-            raise ValueError(
-                f"output_idx must be in [0, {self.n_outputs_-1}], got {output_idx}"
-            )
+            raise ValueError(f"output_idx must be in [0, {self.n_outputs_-1}], got {output_idx}")
 
         tt_model = self.tt_models_[output_idx]
 
@@ -476,7 +460,8 @@ class TTVolterraIdentifier:
             warnings.warn(
                 "MIMO model: returning kernels for first input channel only. "
                 "Access fit_info_['per_output'][0]['cores_per_input'] for all inputs.",
-                UserWarning
+                UserWarning,
+                stacklevel=2,
             )
             return TTTensor(tt_model[0])
 

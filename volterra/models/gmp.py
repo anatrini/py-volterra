@@ -11,16 +11,16 @@ Reference:
     power amplifiers". IEEE Transactions on Signal Processing, 54(10), 3852-3860.
 """
 
-from dataclasses import dataclass, field
-from typing import Optional, Dict, List, Tuple
+from dataclasses import dataclass
+
 import numpy as np
 
+from volterra.tt.tt_als_mimo import build_mimo_delay_matrix
 from volterra.utils.shapes import (
-    validate_mimo_data,
     canonicalize_input,
     canonicalize_output,
+    validate_mimo_data,
 )
-from volterra.tt.tt_als_mimo import build_mimo_delay_matrix
 
 
 @dataclass
@@ -38,6 +38,7 @@ class GMPConfig:
         regularization: Tikhonov regularization parameter (ridge regression).
         verbose: Print fitting progress.
     """
+
     max_cross_lag_distance: int = 0
     max_cross_order: int = 2
     include_lead_terms: bool = True
@@ -102,12 +103,7 @@ class GeneralizedMemoryPolynomial:
         >>> export = model.export_model()
     """
 
-    def __init__(
-        self,
-        memory_length: int,
-        order: int,
-        config: Optional[GMPConfig] = None
-    ):
+    def __init__(self, memory_length: int, order: int, config: GMPConfig | None = None):
         """Initialize GMP model.
 
         Args:
@@ -128,10 +124,10 @@ class GeneralizedMemoryPolynomial:
         self.config = config if config is not None else GMPConfig()
 
         # Will be set during fit()
-        self._coefficients: Optional[List[np.ndarray]] = None
-        self._n_inputs: Optional[int] = None
-        self._n_outputs: Optional[int] = None
-        self._term_indices: Optional[Dict[str, np.ndarray]] = None
+        self._coefficients: list[np.ndarray] | None = None
+        self._n_inputs: int | None = None
+        self._n_outputs: int | None = None
+        self._term_indices: dict[str, np.ndarray] | None = None
 
     @property
     def is_fitted(self) -> bool:
@@ -187,7 +183,7 @@ class GeneralizedMemoryPolynomial:
 
         return n_diagonal + n_cross
 
-    def _generate_term_indices(self, I: int) -> Dict[str, List[Tuple]]:
+    def _generate_term_indices(self, I: int) -> dict[str, list[tuple]]:
         """Generate indices for all terms in the model.
 
         Args:
@@ -197,13 +193,13 @@ class GeneralizedMemoryPolynomial:
             Dictionary with 'diagonal' and 'cross_terms' keys, each containing
             list of tuples describing the terms.
         """
-        indices = {'diagonal': [], 'cross_terms': []}
+        indices = {"diagonal": [], "cross_terms": []}
 
         # Diagonal terms: (input_idx, lag_idx, order)
         for i in range(I):
             for k in range(self.memory_length):
                 for m in range(1, self.order + 1):
-                    indices['diagonal'].append((i, k, m))
+                    indices["diagonal"].append((i, k, m))
 
         # Cross-memory terms (single-input only for now)
         if not self.is_diagonal and I == 1:
@@ -224,7 +220,7 @@ class GeneralizedMemoryPolynomial:
                         for q in range(1, self.order + 1):
                             if p + q <= self.config.max_cross_order:
                                 # (k1, order_k1, k2, order_k2)
-                                indices['cross_terms'].append((k1, p, k2, q))
+                                indices["cross_terms"].append((k1, p, k2, q))
 
         return indices
 
@@ -251,29 +247,28 @@ class GeneralizedMemoryPolynomial:
         for i in range(I):
             X_delay = build_mimo_delay_matrix(x[:, i], self.memory_length)
             # Pad to match T
-            X_delay_padded = np.vstack([
-                np.zeros((self.memory_length - 1, self.memory_length)),
-                X_delay
-            ])
+            X_delay_padded = np.vstack(
+                [np.zeros((self.memory_length - 1, self.memory_length)), X_delay]
+            )
             delay_matrices.append(X_delay_padded)
 
         # Generate term indices
         term_indices = self._generate_term_indices(I)
 
         # Diagonal terms
-        for (i, k, m) in term_indices['diagonal']:
+        for i, k, m in term_indices["diagonal"]:
             Phi[:, col_idx] = delay_matrices[i][:, k] ** m
             col_idx += 1
 
         # Cross-memory terms (SISO only for now)
         if not self.is_diagonal and I == 1:
-            for (k1, p, k2, q) in term_indices['cross_terms']:
+            for k1, p, k2, q in term_indices["cross_terms"]:
                 Phi[:, col_idx] = (delay_matrices[0][:, k1] ** p) * (delay_matrices[0][:, k2] ** q)
                 col_idx += 1
 
         return Phi
 
-    def fit(self, x: np.ndarray, y: np.ndarray) -> 'GeneralizedMemoryPolynomial':
+    def fit(self, x: np.ndarray, y: np.ndarray) -> "GeneralizedMemoryPolynomial":
         """Fit GMP model to input-output data using regularized least squares.
 
         Args:
@@ -366,7 +361,7 @@ class GeneralizedMemoryPolynomial:
             return y_pred_all[:, 0]
         return y_pred_all
 
-    def get_coefficients(self, output_idx: int = 0) -> Dict[str, np.ndarray]:
+    def get_coefficients(self, output_idx: int = 0) -> dict[str, np.ndarray]:
         """Get model coefficients organized by term type.
 
         Args:
@@ -389,19 +384,19 @@ class GeneralizedMemoryPolynomial:
         w = self._coefficients[output_idx]
 
         # Split coefficients by term type
-        n_diagonal = len(self._term_indices['diagonal'])
-        n_cross = len(self._term_indices['cross_terms'])
+        n_diagonal = len(self._term_indices["diagonal"])
+        n_cross = len(self._term_indices["cross_terms"])
 
         result = {
-            'diagonal': w[:n_diagonal],
+            "diagonal": w[:n_diagonal],
         }
 
         if n_cross > 0:
-            result['cross_terms'] = w[n_diagonal:n_diagonal + n_cross]
+            result["cross_terms"] = w[n_diagonal : n_diagonal + n_cross]
 
         return result
 
-    def export_model(self, output_idx: int = 0) -> Dict:
+    def export_model(self, output_idx: int = 0) -> dict:
         """Export model for C++/Rust deployment.
 
         Args:
@@ -427,22 +422,22 @@ class GeneralizedMemoryPolynomial:
             raise IndexError(f"output_idx {output_idx} out of range [0, {self._n_outputs})")
 
         return {
-            'model_type': 'GMP',
-            'memory_length': self.memory_length,
-            'order': self.order,
-            'n_inputs': self._n_inputs,
-            'n_outputs': self._n_outputs,
-            'coefficients': self.get_coefficients(output_idx),
-            'config': {
-                'max_cross_lag_distance': self.config.max_cross_lag_distance,
-                'max_cross_order': self.config.max_cross_order,
-                'include_lead_terms': self.config.include_lead_terms,
-                'include_lag_terms': self.config.include_lag_terms,
-                'regularization': self.config.regularization,
+            "model_type": "GMP",
+            "memory_length": self.memory_length,
+            "order": self.order,
+            "n_inputs": self._n_inputs,
+            "n_outputs": self._n_outputs,
+            "coefficients": self.get_coefficients(output_idx),
+            "config": {
+                "max_cross_lag_distance": self.config.max_cross_lag_distance,
+                "max_cross_order": self.config.max_cross_order,
+                "include_lead_terms": self.config.include_lead_terms,
+                "include_lag_terms": self.config.include_lag_terms,
+                "regularization": self.config.regularization,
             },
-            'term_indices': {
-                'diagonal': self._term_indices['diagonal'],
-                'cross_terms': self._term_indices['cross_terms'],
+            "term_indices": {
+                "diagonal": self._term_indices["diagonal"],
+                "cross_terms": self._term_indices["cross_terms"],
             },
         }
 

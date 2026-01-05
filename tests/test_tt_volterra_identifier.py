@@ -10,11 +10,10 @@ These tests verify:
 Critical for STEP 4: TT-Volterra Identification
 """
 
-import pytest
 import numpy as np
-from numpy.testing import assert_array_equal
+import pytest
 
-from volterra.models import TTVolterraIdentifier, TTVolterraConfig
+from volterra.models import TTVolterraConfig, TTVolterraIdentifier
 
 
 class TestTTVolterraIdentifierBasics:
@@ -22,11 +21,7 @@ class TestTTVolterraIdentifierBasics:
 
     def test_initialization(self):
         """Basic initialization should work."""
-        identifier = TTVolterraIdentifier(
-            memory_length=10,
-            order=2,
-            ranks=[1, 3, 1]
-        )
+        identifier = TTVolterraIdentifier(memory_length=10, order=2, ranks=[1, 3, 1])
 
         assert identifier.memory_length == 10
         assert identifier.order == 2
@@ -35,72 +30,40 @@ class TestTTVolterraIdentifierBasics:
 
     def test_initialization_with_config(self):
         """Initialization with custom config."""
-        config = TTVolterraConfig(
-            solver='mals',
-            max_iter=50,
-            tol=1e-5,
-            verbose=False
-        )
+        config = TTVolterraConfig(solver="mals", max_iter=50, tol=1e-5, verbose=False)
         identifier = TTVolterraIdentifier(
-            memory_length=8,
-            order=3,
-            ranks=[1, 2, 2, 1],
-            config=config
+            memory_length=8, order=3, ranks=[1, 2, 2, 1], config=config
         )
 
-        assert identifier.config.solver == 'mals'
+        assert identifier.config.solver == "mals"
         assert identifier.config.max_iter == 50
 
     def test_invalid_memory_length(self):
         """Memory length must be >= 1."""
         with pytest.raises(ValueError, match="memory_length"):
-            TTVolterraIdentifier(
-                memory_length=0,
-                order=2,
-                ranks=[1, 3, 1]
-            )
+            TTVolterraIdentifier(memory_length=0, order=2, ranks=[1, 3, 1])
 
     def test_invalid_order(self):
         """Order must be >= 1."""
         with pytest.raises(ValueError, match="order"):
-            TTVolterraIdentifier(
-                memory_length=10,
-                order=0,
-                ranks=[1]
-            )
+            TTVolterraIdentifier(memory_length=10, order=0, ranks=[1])
 
     def test_invalid_ranks_length(self):
         """Ranks length must match order+1."""
         with pytest.raises(ValueError, match="ranks"):
-            TTVolterraIdentifier(
-                memory_length=10,
-                order=2,
-                ranks=[1, 3]  # Should be 3 ranks
-            )
+            TTVolterraIdentifier(memory_length=10, order=2, ranks=[1, 3])  # Should be 3 ranks
 
     def test_invalid_boundary_ranks(self):
         """Boundary ranks must be 1."""
         with pytest.raises(ValueError, match="Boundary"):
-            TTVolterraIdentifier(
-                memory_length=10,
-                order=2,
-                ranks=[2, 3, 1]  # r_0 should be 1
-            )
+            TTVolterraIdentifier(memory_length=10, order=2, ranks=[2, 3, 1])  # r_0 should be 1
 
         with pytest.raises(ValueError, match="Boundary"):
-            TTVolterraIdentifier(
-                memory_length=10,
-                order=2,
-                ranks=[1, 3, 2]  # r_M should be 1
-            )
+            TTVolterraIdentifier(memory_length=10, order=2, ranks=[1, 3, 2])  # r_M should be 1
 
     def test_repr(self):
         """String representation should show state."""
-        identifier = TTVolterraIdentifier(
-            memory_length=10,
-            order=2,
-            ranks=[1, 3, 1]
-        )
+        identifier = TTVolterraIdentifier(memory_length=10, order=2, ranks=[1, 3, 1])
 
         repr_str = repr(identifier)
         assert "N=10" in repr_str
@@ -117,11 +80,7 @@ class TestTTVolterraFitting:
         x = np.random.randn(100)
         y = np.random.randn(100)
 
-        identifier = TTVolterraIdentifier(
-            memory_length=5,
-            order=2,
-            ranks=[1, 2, 1]
-        )
+        identifier = TTVolterraIdentifier(memory_length=5, order=2, ranks=[1, 2, 1])
         identifier.fit(x, y)
 
         assert identifier.is_fitted
@@ -135,11 +94,7 @@ class TestTTVolterraFitting:
         x = np.random.randn(100, 2)  # 2 inputs
         y = np.random.randn(100, 3)  # 3 outputs
 
-        identifier = TTVolterraIdentifier(
-            memory_length=5,
-            order=2,
-            ranks=[1, 2, 1]
-        )
+        identifier = TTVolterraIdentifier(memory_length=5, order=2, ranks=[1, 2, 1])
         identifier.fit(x, y)
 
         assert identifier.is_fitted
@@ -152,11 +107,7 @@ class TestTTVolterraFitting:
         x = np.random.randn(100)
         y = np.random.randn(100)
 
-        identifier = TTVolterraIdentifier(
-            memory_length=5,
-            order=2,
-            ranks=[1, 2, 1]
-        )
+        identifier = TTVolterraIdentifier(memory_length=5, order=2, ranks=[1, 2, 1])
         result = identifier.fit(x, y)
 
         assert result is identifier
@@ -166,27 +117,19 @@ class TestTTVolterraFitting:
         x = np.random.randn(100)
         y = np.random.randn(100)
 
-        identifier = TTVolterraIdentifier(
-            memory_length=5,
-            order=2,
-            ranks=[1, 2, 1]
-        )
+        identifier = TTVolterraIdentifier(memory_length=5, order=2, ranks=[1, 2, 1])
         identifier.fit(x, y)
 
         assert identifier.fit_info_ is not None
-        assert 'per_output' in identifier.fit_info_
-        assert 'n_outputs' in identifier.fit_info_
+        assert "per_output" in identifier.fit_info_
+        assert "n_outputs" in identifier.fit_info_
 
     def test_fit_invalid_data_shape_mismatch(self):
         """Mismatched input/output lengths should raise error."""
         x = np.random.randn(100)
         y = np.random.randn(50)  # Wrong length
 
-        identifier = TTVolterraIdentifier(
-            memory_length=5,
-            order=2,
-            ranks=[1, 2, 1]
-        )
+        identifier = TTVolterraIdentifier(memory_length=5, order=2, ranks=[1, 2, 1])
 
         with pytest.raises(ValueError, match="same length"):
             identifier.fit(x, y)
@@ -197,11 +140,7 @@ class TestTTVolterraPrediction:
 
     def test_predict_not_fitted(self):
         """predict() before fit() should raise error."""
-        identifier = TTVolterraIdentifier(
-            memory_length=5,
-            order=2,
-            ranks=[1, 2, 1]
-        )
+        identifier = TTVolterraIdentifier(memory_length=5, order=2, ranks=[1, 2, 1])
         x = np.random.randn(100)
 
         with pytest.raises(ValueError, match="not fitted"):
@@ -213,11 +152,7 @@ class TestTTVolterraPrediction:
         x_train = np.random.randn(100)
         y_train = np.random.randn(100)
 
-        identifier = TTVolterraIdentifier(
-            memory_length=5,
-            order=2,
-            ranks=[1, 2, 1]
-        )
+        identifier = TTVolterraIdentifier(memory_length=5, order=2, ranks=[1, 2, 1])
         identifier.fit(x_train, y_train)
 
         x_test = np.random.randn(50)
@@ -234,11 +169,7 @@ class TestTTVolterraPrediction:
         x_train = np.random.randn(100, 2)
         y_train = np.random.randn(100, 3)
 
-        identifier = TTVolterraIdentifier(
-            memory_length=5,
-            order=2,
-            ranks=[1, 2, 1]
-        )
+        identifier = TTVolterraIdentifier(memory_length=5, order=2, ranks=[1, 2, 1])
         identifier.fit(x_train, y_train)
 
         x_test = np.random.randn(50, 2)
@@ -253,11 +184,7 @@ class TestTTVolterraPrediction:
         x_train = np.random.randn(100, 2)
         y_train = np.random.randn(100)
 
-        identifier = TTVolterraIdentifier(
-            memory_length=5,
-            order=2,
-            ranks=[1, 2, 1]
-        )
+        identifier = TTVolterraIdentifier(memory_length=5, order=2, ranks=[1, 2, 1])
         identifier.fit(x_train, y_train)
 
         x_test_wrong = np.random.randn(50, 3)  # 3 inputs, expected 2
@@ -270,11 +197,7 @@ class TestTTVolterraPrediction:
         x_train = np.random.randn(100)
         y_train = np.random.randn(100)
 
-        identifier = TTVolterraIdentifier(
-            memory_length=10,
-            order=2,
-            ranks=[1, 2, 1]
-        )
+        identifier = TTVolterraIdentifier(memory_length=10, order=2, ranks=[1, 2, 1])
         identifier.fit(x_train, y_train)
 
         x_test_short = np.random.randn(5)  # Less than memory_length=10
@@ -288,11 +211,7 @@ class TestTTVolterraKernelExtraction:
 
     def test_get_kernels_not_fitted(self):
         """get_kernels() before fit() should raise error."""
-        identifier = TTVolterraIdentifier(
-            memory_length=5,
-            order=2,
-            ranks=[1, 2, 1]
-        )
+        identifier = TTVolterraIdentifier(memory_length=5, order=2, ranks=[1, 2, 1])
 
         with pytest.raises(ValueError, match="not fitted"):
             identifier.get_kernels()
@@ -303,9 +222,7 @@ class TestTTVolterraKernelExtraction:
         y = np.random.randn(100)
 
         identifier = TTVolterraIdentifier(
-            memory_length=5,
-            order=2,
-            ranks=[1, 1, 1]  # Diagonal ranks
+            memory_length=5, order=2, ranks=[1, 1, 1]  # Diagonal ranks
         )
         identifier.fit(x, y)
 
@@ -321,9 +238,7 @@ class TestTTVolterraKernelExtraction:
         y = np.random.randn(100, 3)
 
         identifier = TTVolterraIdentifier(
-            memory_length=5,
-            order=2,
-            ranks=[1, 1, 1]  # Diagonal ranks
+            memory_length=5, order=2, ranks=[1, 1, 1]  # Diagonal ranks
         )
         identifier.fit(x, y)
 
@@ -338,9 +253,7 @@ class TestTTVolterraKernelExtraction:
         y = np.random.randn(100)
 
         identifier = TTVolterraIdentifier(
-            memory_length=5,
-            order=2,
-            ranks=[1, 1, 1]  # Diagonal ranks
+            memory_length=5, order=2, ranks=[1, 1, 1]  # Diagonal ranks
         )
         identifier.fit(x, y)
 
@@ -355,7 +268,7 @@ class TestTTVolterraConfig:
         """Default config should have sensible values."""
         config = TTVolterraConfig()
 
-        assert config.solver == 'als'
+        assert config.solver == "als"
         assert config.max_iter == 100
         assert config.tol == 1e-6
         assert not config.verbose
@@ -364,32 +277,29 @@ class TestTTVolterraConfig:
     def test_config_invalid_solver(self):
         """Invalid solver should raise error."""
         with pytest.raises(ValueError, match="Solver"):
-            TTVolterraConfig(solver='invalid')
+            TTVolterraConfig(solver="invalid")
 
     def test_config_rank_adaptation_auto_mals(self):
         """rank_adaptation=True should set solver='mals'."""
-        config = TTVolterraConfig(
-            solver='als',
-            rank_adaptation=True
-        )
+        config = TTVolterraConfig(solver="als", rank_adaptation=True)
 
         # Should auto-switch to mals
-        assert config.solver == 'mals'
+        assert config.solver == "mals"
 
     def test_config_custom_parameters(self):
         """Custom config parameters should be set."""
         config = TTVolterraConfig(
-            solver='mals',
+            solver="mals",
             max_iter=50,
             tol=1e-5,
             regularization=1e-6,
             max_rank=8,
             rank_tol=1e-3,
             verbose=True,
-            diagonal_only=True
+            diagonal_only=True,
         )
 
-        assert config.solver == 'mals'
+        assert config.solver == "mals"
         assert config.max_iter == 50
         assert config.tol == 1e-5
         assert config.regularization == 1e-6

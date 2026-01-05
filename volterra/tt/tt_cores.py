@@ -14,16 +14,16 @@ References:
 - Holtz et al. (2012), "The alternating linear scheme for tensor optimization"
 """
 
-import numpy as np
-from typing import List, Tuple, Optional
 import warnings
+
+import numpy as np
 
 
 def validate_tt_cores_structure(
-    cores: List[np.ndarray],
-    expected_mode_size: Optional[int] = None,
-    allow_variable_ranks: bool = True
-) -> Tuple[List[int], int]:
+    cores: list[np.ndarray],
+    expected_mode_size: int | None = None,
+    allow_variable_ranks: bool = True,
+) -> tuple[list[int], int]:
     """
     Validate TT cores have correct structure and compatible shapes.
 
@@ -65,7 +65,7 @@ def validate_tt_cores_structure(
     if len(cores) == 0:
         raise ValueError("cores list cannot be empty")
 
-    M = len(cores)
+    len(cores)
 
     # Check each core has 3 dimensions
     for k, core in enumerate(cores):
@@ -73,8 +73,7 @@ def validate_tt_cores_structure(
             raise ValueError(f"Core {k} must be np.ndarray, got {type(core)}")
         if core.ndim != 3:
             raise ValueError(
-                f"Core {k} must have 3 dimensions (r_left, n, r_right), "
-                f"got shape {core.shape}"
+                f"Core {k} must have 3 dimensions (r_left, n, r_right), " f"got shape {core.shape}"
             )
 
     # Extract ranks and mode sizes
@@ -111,9 +110,7 @@ def validate_tt_cores_structure(
         n_ref = mode_sizes[0]
         for k, n_k in enumerate(mode_sizes):
             if n_k != n_ref:
-                raise ValueError(
-                    f"Core {k}: mode size {n_k} doesn't match first core's {n_ref}"
-                )
+                raise ValueError(f"Core {k}: mode size {n_k} doesn't match first core's {n_ref}")
         mode_size = n_ref
     else:
         # Check if uniform
@@ -126,10 +123,8 @@ def validate_tt_cores_structure(
 
 
 def left_orthogonalize_cores(
-    cores: List[np.ndarray],
-    pivot: int,
-    regularization: float = 0.0
-) -> List[np.ndarray]:
+    cores: list[np.ndarray], pivot: int, _regularization: float = 0.0
+) -> list[np.ndarray]:
     """
     Left-orthogonalize TT cores up to pivot using QR decomposition.
 
@@ -145,8 +140,8 @@ def left_orthogonalize_cores(
         TT cores
     pivot : int
         Core index to orthogonalize towards (not modified directly)
-    regularization : float, default=0.0
-        Small regularization for numerical stability (if needed)
+    _regularization : float, default=0.0
+        Reserved for future numerical stability enhancements
 
     Returns
     -------
@@ -197,16 +192,14 @@ def left_orthogonalize_cores(
 
             # Contract R (r_new, r_right) with next_core (r_right, n_{k+1}, r_{k+2})
             # Result: (r_new, n_{k+1}, r_{k+2})
-            cores_orth[k + 1] = np.einsum('ij,jkl->ikl', R, next_core)
+            cores_orth[k + 1] = np.einsum("ij,jkl->ikl", R, next_core)
 
     return cores_orth
 
 
 def right_orthogonalize_cores(
-    cores: List[np.ndarray],
-    pivot: int,
-    regularization: float = 0.0
-) -> List[np.ndarray]:
+    cores: list[np.ndarray], pivot: int, _regularization: float = 0.0
+) -> list[np.ndarray]:
     """
     Right-orthogonalize TT cores from pivot onwards using QR decomposition.
 
@@ -219,8 +212,8 @@ def right_orthogonalize_cores(
         TT cores
     pivot : int
         Core index to orthogonalize towards (not modified directly)
-    regularization : float, default=0.0
-        Small regularization for numerical stability
+    _regularization : float, default=0.0
+        Reserved for future numerical stability enhancements
 
     Returns
     -------
@@ -276,17 +269,14 @@ def right_orthogonalize_cores(
 
             # Contract prev_core (r_{k-2}, n_{k-1}, r_left) with R (r_left, r_new)
             # Result: (r_{k-2}, n_{k-1}, r_new)
-            cores_orth[k - 1] = np.einsum('ijk,kl->ijl', prev_core, R)
+            cores_orth[k - 1] = np.einsum("ijk,kl->ijl", prev_core, R)
 
     return cores_orth
 
 
 def truncate_core_svd(
-    core: np.ndarray,
-    max_rank: int,
-    rank_tol: float = 1e-6,
-    return_truncation_error: bool = False
-) -> Tuple[np.ndarray, Optional[float]]:
+    core: np.ndarray, max_rank: int, rank_tol: float = 1e-6, return_truncation_error: bool = False
+) -> tuple[np.ndarray, float | None]:
     """
     Truncate TT core rank using SVD.
 
@@ -334,7 +324,7 @@ def truncate_core_svd(
 
     # Determine truncation rank
     if len(S) == 0:
-        warnings.warn("Core has zero singular values, returning as-is", UserWarning)
+        warnings.warn("Core has zero singular values, returning as-is", UserWarning, stacklevel=2)
         if return_truncation_error:
             return core, 0.0
         else:
@@ -344,7 +334,7 @@ def truncate_core_svd(
     threshold = rank_tol * sigma_max
 
     # Count significant singular values
-    n_significant = np.sum(S >= threshold)
+    n_significant = np.sum(threshold <= S)
 
     # Apply max_rank constraint
     r_new = min(n_significant, max_rank, len(S))
@@ -367,7 +357,7 @@ def truncate_core_svd(
 
     # Reconstruct truncated core
     # Absorb S into Vt: diag(S_trunc) @ Vt_trunc
-    SVt = np.diag(S_trunc) @ Vt_trunc  # (r_new, r_right)
+    np.diag(S_trunc) @ Vt_trunc  # (r_new, r_right)
 
     # Reshape U and combine
     # U_trunc: (r_left * n, r_new)
@@ -396,10 +386,7 @@ def truncate_core_svd(
         return core_truncated, None
 
 
-def merge_two_cores(
-    core_left: np.ndarray,
-    core_right: np.ndarray
-) -> np.ndarray:
+def merge_two_cores(core_left: np.ndarray, core_right: np.ndarray) -> np.ndarray:
     """
     Merge two adjacent TT cores into one.
 
@@ -436,7 +423,7 @@ def merge_two_cores(
 
     # Contract: (r_left, n_k, r_mid) @ (r_mid, n_{k+1}, r_right)
     # -> (r_left, n_k, n_{k+1}, r_right)
-    merged = np.einsum('ijk,klm->ijlm', core_left, core_right)
+    merged = np.einsum("ijk,klm->ijlm", core_left, core_right)
 
     # Reshape to (r_left, n_k * n_{k+1}, r_right)
     merged_core = merged.reshape(r_left, n_k * n_k1, r_right)
@@ -445,11 +432,8 @@ def merge_two_cores(
 
 
 def split_core_svd(
-    merged_core: np.ndarray,
-    n_left: int,
-    max_rank: int,
-    rank_tol: float = 1e-6
-) -> Tuple[np.ndarray, np.ndarray]:
+    merged_core: np.ndarray, n_left: int, max_rank: int, rank_tol: float = 1e-6
+) -> tuple[np.ndarray, np.ndarray]:
     """
     Split a merged TT core into two using SVD.
 
@@ -485,9 +469,7 @@ def split_core_svd(
     r_left, n_merged, r_right = merged_core.shape
 
     if n_merged % n_left != 0:
-        raise ValueError(
-            f"Merged mode size {n_merged} not divisible by n_left {n_left}"
-        )
+        raise ValueError(f"Merged mode size {n_merged} not divisible by n_left {n_left}")
 
     n_right = n_merged // n_left
 
@@ -503,7 +485,7 @@ def split_core_svd(
     # Truncate
     sigma_max = S[0] if len(S) > 0 else 1.0
     threshold = rank_tol * sigma_max
-    n_significant = np.sum(S >= threshold)
+    n_significant = np.sum(threshold <= S)
     r_new = min(n_significant, max_rank, len(S))
 
     if r_new == 0:

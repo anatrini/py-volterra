@@ -19,9 +19,9 @@ References:
 - Bigoni et al. (2016), "Spectral TT cross approximation of parametric functions"
 """
 
-import numpy as np
-from typing import List, Tuple
 from dataclasses import dataclass
+
+import numpy as np
 
 
 @dataclass
@@ -34,7 +34,8 @@ class TTTensor:
     cores : List[np.ndarray]
         List of K TT cores, where cores[k] has shape (r_{k-1}, n_k, r_k)
     """
-    cores: List[np.ndarray]
+
+    cores: list[np.ndarray]
 
     def __post_init__(self):
         """Validate TT cores on construction."""
@@ -46,12 +47,12 @@ class TTTensor:
         return len(self.cores)
 
     @property
-    def shape(self) -> Tuple[int, ...]:
+    def shape(self) -> tuple[int, ...]:
         """Shape of the full tensor (n_0, n_1, ..., n_{K-1})."""
         return tuple(core.shape[1] for core in self.cores)
 
     @property
-    def ranks(self) -> Tuple[int, ...]:
+    def ranks(self) -> tuple[int, ...]:
         """TT ranks (r_0, r_1, ..., r_K)."""
         if len(self.cores) == 0:
             return ()
@@ -65,7 +66,7 @@ class TTTensor:
         return f"TTTensor(shape={self.shape}, ranks={self.ranks})"
 
 
-def validate_tt_cores(cores: List[np.ndarray]) -> None:
+def validate_tt_cores(cores: list[np.ndarray]) -> None:
     """
     Validate that TT cores have compatible shapes.
 
@@ -101,9 +102,7 @@ def validate_tt_cores(cores: List[np.ndarray]) -> None:
     for k, core in enumerate(cores):
         # Check dimensionality
         if core.ndim != 3:
-            raise ValueError(
-                f"Core {k} must be 3D array, got shape {core.shape}"
-            )
+            raise ValueError(f"Core {k} must be 3D array, got shape {core.shape}")
 
         # Check not empty
         if core.size == 0:
@@ -113,13 +112,9 @@ def validate_tt_cores(cores: List[np.ndarray]) -> None:
 
         # Check boundary conditions
         if k == 0 and r_left != 1:
-            raise ValueError(
-                f"First core must have r_0=1 (left rank), got {r_left}"
-            )
+            raise ValueError(f"First core must have r_0=1 (left rank), got {r_left}")
         if k == len(cores) - 1 and r_right != 1:
-            raise ValueError(
-                f"Last core must have r_K=1 (right rank), got {r_right}"
-            )
+            raise ValueError(f"Last core must have r_K=1 (right rank), got {r_right}")
 
         # Check rank compatibility with next core
         if k < len(cores) - 1:
@@ -132,7 +127,7 @@ def validate_tt_cores(cores: List[np.ndarray]) -> None:
                 )
 
 
-def tt_matvec(cores: List[np.ndarray], x: np.ndarray) -> np.ndarray:
+def tt_matvec(cores: list[np.ndarray], x: np.ndarray) -> np.ndarray:
     """
     Tensor-Train matrix-vector multiplication for Volterra evaluation.
 
@@ -180,16 +175,14 @@ def tt_matvec(cores: List[np.ndarray], x: np.ndarray) -> np.ndarray:
     """
     validate_tt_cores(cores)
 
-    K = len(cores)
+    len(cores)
     N = x.shape[0]
 
     # Check dimension compatibility
     for k, core in enumerate(cores):
         n_k = core.shape[1]
         if n_k != N:
-            raise ValueError(
-                f"Core {k} has dimension n_{k}={n_k}, but input has length {N}"
-            )
+            raise ValueError(f"Core {k} has dimension n_{k}={n_k}, but input has length {N}")
 
     # Start with scalar 1.0 (r_0 = 1)
     result = np.array([[1.0]])  # Shape (1, r_0=1)
@@ -210,7 +203,7 @@ def tt_matvec(cores: List[np.ndarray], x: np.ndarray) -> np.ndarray:
     return float(result[0, 0])
 
 
-def tt_to_full(cores: List[np.ndarray]) -> np.ndarray:
+def tt_to_full(cores: list[np.ndarray]) -> np.ndarray:
     """
     Materialize full tensor from TT cores.
 
