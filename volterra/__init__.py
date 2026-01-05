@@ -131,7 +131,7 @@ try:
 except ImportError:
     pass
 
-__version__ = "0.7.4-dev"
+__version__ = "0.8.0"
 
 __all__ = [
     # Core types
