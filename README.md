@@ -9,7 +9,7 @@ Comprehensive library supporting diagonal (memory polynomial), generalized memor
 - **Multiple Model Complexities**:
   - **Diagonal Volterra**: Memory polynomials / Generalized Hammerstein (O(M·N) params)
   - **GMP**: Generalized Memory Polynomial with selective cross-memory terms
-  - **Full TT-Volterra**: Arbitrary-rank tensor-train with cross-memory interactions (O(M·r²·(I·N)²))
+  - **Full TT-Volterra**: Arbitrary-rank tensor-train with cross-memory interactions (O(M·r²·I·N))
 - **Automatic Model Selection**: Intelligent selection between MP, GMP, and TT using AIC/BIC/NMSE
 - **Multiple Solvers**:
   - **ALS**: Batch fixed-rank (stationary systems, highest accuracy)
@@ -17,7 +17,7 @@ Comprehensive library supporting diagonal (memory polynomial), generalized memor
   - **MALS**: Adaptive-rank (experimental)
 - **MIMO Support**: Full support for multi-input multi-output systems
 - **Efficient**: Tensor-train decomposition avoids curse of dimensionality
-- **Numerically Stable**: Machine precision coefficient recovery
+- **Numerically Stable**: High-precision coefficient recovery (< 1e-12 MSE for well-posed problems)
 - **Production Ready**: 357 tests, 76% coverage, comprehensive documentation
 
 ## Installation
@@ -249,7 +249,7 @@ G[i1,...,iM] = G_1[i1] · G_2[i2] · ... · G_M[iM]
 
 - **G_m**: TT core of shape (r_{m-1}, I×N, r_m)
 - **Ranks**: [r_0=1, r_1, ..., r_{M-1}, r_M=1]
-- **Parameters**: M × r² × (I×N)² (polynomial scaling with ranks)
+- **Parameters**: O(M × r² × I × N) for equal internal ranks r
 - **Captures cross-memory interactions** with controlled complexity
 
 ### MIMO Models
@@ -259,6 +259,12 @@ All models support multi-input multi-output (MIMO):
 y_o(t) = f_o(x_1[t], ..., x_I[t])  for each output o = 1, ..., O
 ```
 
+**Array Shapes:**
+- Input `x`: shape `(T, I)` where T = number of samples, I = number of input channels
+- Output `y`: shape `(T, O)` where O = number of output channels
+- SISO is special case with I=1, O=1
+
+**Implementation:**
 - Separate model per output channel (baseline)
 - Shared parameters across outputs (advanced, experimental)
 
@@ -270,9 +276,9 @@ y_o(t) = f_o(x_1[t], ..., x_I[t])  for each output o = 1, ..., O
 | M=5, N=20 | 100 | O(5·T·400) | Audio effects |
 | M=7, N=50 | 350 | O(7·T·2500) | High-fidelity |
 
-**Convergence:** Typically 20-50 iterations
+**Convergence:** Typically 20-50 iterations for diagonal models
 
-**Accuracy:** < 1e-20 MSE on clean data, machine precision coefficient recovery
+**Accuracy:** High precision on well-conditioned problems (MSE < 1e-12 for diagonal models with clean data)
 
 ## Solvers Comparison
 
@@ -384,25 +390,26 @@ uv run pytest --cov=volterra --cov-report=html
 ## References
 
 ### Volterra Series and Nonlinear System Identification
-1. Boyd, S., Tang, Y.Y., & Chua, L.O. (1983). "Measuring Volterra kernels", IEEE Trans. Circuits and Systems
+1. Boyd, S., Tang, Y.Y., & Chua, L.O. (1983). "Measuring Volterra kernels", IEEE Trans. Circuits and Systems, 30(8), 571-577. DOI: [10.1109/TCS.1983.1085391](https://doi.org/10.1109/TCS.1983.1085391)
 2. Schetzen, M. (1980). "The Volterra and Wiener Theories of Nonlinear Systems", Wiley
-3. Novak, A., Lotton, P., & Simon, L. (2015). "Synchronized Swept-Sine: Theory, Application, and Implementation", Journal of the Audio Engineering Society, 63(10), 786-798
+3. Novak, A., Lotton, P., & Simon, L. (2015). "Synchronized Swept-Sine: Theory, Application, and Implementation", Journal of the Audio Engineering Society, 63(10), 786-798. DOI: [10.17743/jaes.2015.0071](https://doi.org/10.17743/jaes.2015.0071)
 
 ### Tensor-Train Decomposition and TT-ALS
-4. Oseledets, I.V. (2011). "Tensor-Train Decomposition", SIAM J. Sci. Comput., 33(5), 2295-2317
-5. Holtz, S., Rohwedder, T., & Schneider, R. (2012). "The Alternating Linear Scheme for Tensor Optimization in the Tensor Train Format", SIAM J. Sci. Comput., 34(2), A683-A713
-6. Batselier, K., Chen, Z., & Wong, N. (2017). "Tensor Network Alternating Linear Scheme for MIMO Volterra System Identification", Automatica, 84, 26-35
+4. Oseledets, I.V. (2011). "Tensor-Train Decomposition", SIAM J. Sci. Comput., 33(5), 2295-2317. DOI: [10.1137/090752286](https://doi.org/10.1137/090752286)
+5. Holtz, S., Rohwedder, T., & Schneider, R. (2012). "The Alternating Linear Scheme for Tensor Optimization in the Tensor Train Format", SIAM J. Sci. Comput., 34(2), A683-A713. DOI: [10.1137/100818893](https://doi.org/10.1137/100818893)
+6. Steinlechner, M. (2016). "Riemannian Optimization for High-Dimensional Tensor Completion", SIAM J. Sci. Comput., 38(5), S461-S484. DOI: [10.1137/15M1010506](https://doi.org/10.1137/15M1010506)
+7. Batselier, K., Chen, Z., & Wong, N. (2017). "Tensor Network Alternating Linear Scheme for MIMO Volterra System Identification", Automatica, 84, 26-35. DOI: [10.1016/j.automatica.2017.06.033](https://doi.org/10.1016/j.automatica.2017.06.033)
 
 ### Generalized Memory Polynomial
-7. Morgan, D.R., Ma, Z., Kim, J., Zierdt, M.G., & Pastalan, J. (2006). "A Generalized Memory Polynomial Model for Digital Predistortion of RF Power Amplifiers", IEEE Transactions on Signal Processing, 54(10), 3852-3860
+8. Morgan, D.R., Ma, Z., Kim, J., Zierdt, M.G., & Pastalan, J. (2006). "A Generalized Memory Polynomial Model for Digital Predistortion of RF Power Amplifiers", IEEE Transactions on Signal Processing, 54(10), 3852-3860. DOI: [10.1109/TSP.2006.879264](https://doi.org/10.1109/TSP.2006.879264)
 
 ### Model Selection
-8. Akaike, H. (1974). "A new look at the statistical model identification", IEEE Transactions on Automatic Control, 19(6), 716-723
-9. Schwarz, G. (1978). "Estimating the Dimension of a Model", The Annals of Statistics, 6(2), 461-464
+9. Akaike, H. (1974). "A new look at the statistical model identification", IEEE Transactions on Automatic Control, 19(6), 716-723. DOI: [10.1109/TAC.1974.1100705](https://doi.org/10.1109/TAC.1974.1100705)
+10. Schwarz, G. (1978). "Estimating the Dimension of a Model", The Annals of Statistics, 6(2), 461-464. DOI: [10.1214/aos/1176344136](https://doi.org/10.1214/aos/1176344136)
 
 ### Adaptive Filtering
-10. Haykin, S. (2002). "Adaptive Filter Theory", Prentice Hall (4th edition)
-11. Diniz, P.S.R. (2013). "Adaptive Filtering: Algorithms and Practical Implementation", Springer (4th edition)
+11. Haykin, S. (2002). "Adaptive Filter Theory", Prentice Hall (4th edition)
+12. Diniz, P.S.R. (2013). "Adaptive Filtering: Algorithms and Practical Implementation", Springer (4th edition)
 
 ## License
 
