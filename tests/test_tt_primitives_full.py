@@ -317,7 +317,7 @@ class TestTTDesignMatrix:
         X_delay = np.random.randn(50, 5)
 
         Phi = build_tt_design_matrix(
-            X_delay, core_idx=0, order=3, left_cores=None, right_cores=None
+            X_delay, _core_idx=0, _order=3, left_cores=None, right_cores=None
         )
 
         # For first core (r_left=1, mode=5, r_right=r1)

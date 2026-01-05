@@ -256,7 +256,7 @@ class ModelSelector:
         # Predict on validation
         y_val_pred = model.predict(x_val)
 
-        # Compute metrics
+        # Compute metrics (GMP returns full-length predictions)
         nmse = self._compute_nmse(y_val, y_val_pred)
         n_params = self._count_parameters(model, "Diagonal-MP")
         aic = self._compute_aic(nmse, len(y_val), n_params)
@@ -359,11 +359,14 @@ class ModelSelector:
         # Predict on validation
         y_val_pred = model.predict(x_val)
 
+        # Trim y_val to match prediction length (TT models produce T - memory_length + 1 outputs)
+        y_val_trimmed = y_val[self.config.memory_length - 1 :]
+
         # Compute metrics
-        nmse = self._compute_nmse(y_val, y_val_pred)
+        nmse = self._compute_nmse(y_val_trimmed, y_val_pred)
         n_params = self._count_parameters(model, "TT-Full")
-        aic = self._compute_aic(nmse, len(y_val), n_params)
-        bic = self._compute_bic(nmse, len(y_val), n_params)
+        aic = self._compute_aic(nmse, len(y_val_trimmed), n_params)
+        bic = self._compute_bic(nmse, len(y_val_trimmed), n_params)
 
         if self.config.verbose:
             print(f"  NMSE: {nmse:.6e}, AIC: {aic:.2f}, BIC: {bic:.2f}, Params: {n_params}")
