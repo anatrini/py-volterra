@@ -10,11 +10,14 @@ sub-millisecond latency on modern CPUs.
 """
 
 from typing import Protocol
+
 import numpy as np
-from volterra.kernels_full import VolterraKernelFull, ArrayF
+
+from volterra.kernels_full import ArrayF, VolterraKernelFull
 
 try:
     from numba import njit, prange
+
     NUMBA_AVAILABLE = True
 except ImportError:
     NUMBA_AVAILABLE = False
@@ -25,10 +28,7 @@ class VolterraFullEngine(Protocol):
     """Strategy interface for full-order Volterra computation."""
 
     def process_block(
-        self,
-        x_block: ArrayF,
-        x_history: ArrayF,
-        kernel: VolterraKernelFull
+        self, x_block: ArrayF, x_history: ArrayF, kernel: VolterraKernelFull
     ) -> ArrayF:
         """
         Process a block through all active Volterra orders.
@@ -53,10 +53,7 @@ class DiagonalNumpyEngine:
     """
 
     def process_block(
-        self,
-        x_block: ArrayF,
-        x_history: ArrayF,
-        kernel: VolterraKernelFull
+        self, x_block: ArrayF, x_history: ArrayF, kernel: VolterraKernelFull
     ) -> ArrayF:
         B = len(x_block)
         N = kernel.N
@@ -92,13 +89,7 @@ class DiagonalNumpyEngine:
 
         return y
 
-    def _convolve_order1(
-        self,
-        x_ext: ArrayF,
-        h1: ArrayF,
-        B: int,
-        N: int
-    ) -> ArrayF:
+    def _convolve_order1(self, x_ext: ArrayF, h1: ArrayF, B: int, N: int) -> ArrayF:
         """Linear convolution using efficient NumPy."""
         y = np.zeros(B, dtype=np.float64)
 
@@ -106,17 +97,12 @@ class DiagonalNumpyEngine:
             start_idx = len(x_ext) - B + n - (N - 1)
             end_idx = len(x_ext) - B + n + 1
             x_window = x_ext[start_idx:end_idx][::-1]  # Reverse for convolution
-            y[n] = np.dot(h1[:len(x_window)], x_window)
+            y[n] = np.dot(h1[: len(x_window)], x_window)
 
         return y
 
     def _convolve_diagonal(
-        self,
-        x_ext: ArrayF,
-        h_diag: ArrayF,
-        B: int,
-        N: int,
-        order: int
+        self, x_ext: ArrayF, h_diag: ArrayF, B: int, N: int, order: int
     ) -> ArrayF:
         """
         Diagonal convolution: y[n] = Σᵢ h[i] · x[n-i]^order
@@ -131,13 +117,7 @@ class DiagonalNumpyEngine:
 
         return y
 
-    def _convolve_full_h2(
-        self,
-        x_ext: ArrayF,
-        h2: ArrayF,
-        B: int,
-        N: int
-    ) -> ArrayF:
+    def _convolve_full_h2(self, x_ext: ArrayF, h2: ArrayF, B: int, N: int) -> ArrayF:
         """Full h2 matrix convolution (for backward compatibility)."""
         y = np.zeros(B, dtype=np.float64)
 
@@ -158,12 +138,7 @@ class DiagonalNumpyEngine:
 if NUMBA_AVAILABLE:
 
     @njit(parallel=True, fastmath=True, cache=True)
-    def _numba_convolve_order1(
-        x_ext: np.ndarray,
-        h1: np.ndarray,
-        B: int,
-        N: int
-    ) -> np.ndarray:
+    def _numba_convolve_order1(x_ext: np.ndarray, h1: np.ndarray, B: int, N: int) -> np.ndarray:
         """Numba-optimized linear convolution."""
         y = np.zeros(B, dtype=np.float64)
 
@@ -179,10 +154,7 @@ if NUMBA_AVAILABLE:
 
     @njit(parallel=True, fastmath=True, cache=True)
     def _numba_convolve_diagonal_order2(
-        x_ext: np.ndarray,
-        h2_diag: np.ndarray,
-        B: int,
-        N: int
+        x_ext: np.ndarray, h2_diag: np.ndarray, B: int, N: int
     ) -> np.ndarray:
         """Diagonal 2nd-order: y[n] = Σᵢ h2[i]·x[n-i]²"""
         y = np.zeros(B, dtype=np.float64)
@@ -200,10 +172,7 @@ if NUMBA_AVAILABLE:
 
     @njit(parallel=True, fastmath=True, cache=True)
     def _numba_convolve_diagonal_order3(
-        x_ext: np.ndarray,
-        h3_diag: np.ndarray,
-        B: int,
-        N: int
+        x_ext: np.ndarray, h3_diag: np.ndarray, B: int, N: int
     ) -> np.ndarray:
         """Diagonal 3rd-order: y[n] = Σᵢ h3[i]·x[n-i]³"""
         y = np.zeros(B, dtype=np.float64)
@@ -221,10 +190,7 @@ if NUMBA_AVAILABLE:
 
     @njit(parallel=True, fastmath=True, cache=True)
     def _numba_convolve_diagonal_order4(
-        x_ext: np.ndarray,
-        h4_diag: np.ndarray,
-        B: int,
-        N: int
+        x_ext: np.ndarray, h4_diag: np.ndarray, B: int, N: int
     ) -> np.ndarray:
         """Diagonal 4th-order: y[n] = Σᵢ h4[i]·x[n-i]⁴"""
         y = np.zeros(B, dtype=np.float64)
@@ -243,10 +209,7 @@ if NUMBA_AVAILABLE:
 
     @njit(parallel=True, fastmath=True, cache=True)
     def _numba_convolve_diagonal_order5(
-        x_ext: np.ndarray,
-        h5_diag: np.ndarray,
-        B: int,
-        N: int
+        x_ext: np.ndarray, h5_diag: np.ndarray, B: int, N: int
     ) -> np.ndarray:
         """Diagonal 5th-order: y[n] = Σᵢ h5[i]·x[n-i]⁵"""
         y = np.zeros(B, dtype=np.float64)
@@ -264,12 +227,7 @@ if NUMBA_AVAILABLE:
         return y
 
     @njit(parallel=False, fastmath=True, cache=True)
-    def _numba_convolve_full_h2(
-        x_ext: np.ndarray,
-        h2: np.ndarray,
-        B: int,
-        N: int
-    ) -> np.ndarray:
+    def _numba_convolve_full_h2(x_ext: np.ndarray, h2: np.ndarray, B: int, N: int) -> np.ndarray:
         """Full h2 matrix (for backward compatibility with VolterraKernel2)."""
         y = np.zeros(B, dtype=np.float64)
 
@@ -319,10 +277,7 @@ class DiagonalNumbaEngine:
         _numba_convolve_full_h2(x_ext, h2, 512, 512)
 
     def process_block(
-        self,
-        x_block: ArrayF,
-        x_history: ArrayF,
-        kernel: VolterraKernelFull
+        self, x_block: ArrayF, x_history: ArrayF, kernel: VolterraKernelFull
     ) -> ArrayF:
         B = len(x_block)
         N = kernel.N

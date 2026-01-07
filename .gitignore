@@ -65,7 +65,8 @@ demo_*.png
 
 # Jupyter
 .ipynb_checkpoints/
-*.ipynb
+# Allow notebooks in notebooks/ directory (for documentation)
+# *.ipynb
 
 # uv
 .uv/

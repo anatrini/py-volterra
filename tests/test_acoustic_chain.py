@@ -10,11 +10,11 @@ These tests verify:
 Critical for STEP 5: Nonlinear+RIR Pipeline
 """
 
-import pytest
 import numpy as np
+import pytest
 from numpy.testing import assert_allclose
 
-from volterra.pipelines import NonlinearThenRIR, AcousticChainConfig
+from volterra.pipelines import AcousticChainConfig, NonlinearThenRIR
 
 
 class MockNonlinearModel:
@@ -40,24 +40,20 @@ class TestAcousticChainConfig:
         """Default config should have sensible values."""
         config = AcousticChainConfig()
 
-        assert config.rir_method == 'fft'
+        assert config.rir_method == "fft"
         assert not config.normalize_rir
         assert config.trim_output
 
     def test_config_invalid_rir_method(self):
         """Invalid RIR method should raise error."""
         with pytest.raises(ValueError, match="rir_method"):
-            AcousticChainConfig(rir_method='invalid')
+            AcousticChainConfig(rir_method="invalid")
 
     def test_config_custom_parameters(self):
         """Custom config parameters should be set."""
-        config = AcousticChainConfig(
-            rir_method='direct',
-            normalize_rir=True,
-            trim_output=False
-        )
+        config = AcousticChainConfig(rir_method="direct", normalize_rir=True, trim_output=False)
 
-        assert config.rir_method == 'direct'
+        assert config.rir_method == "direct"
         assert config.normalize_rir
         assert not config.trim_output
 
@@ -101,6 +97,7 @@ class TestNonlinearThenRIRInitialization:
 
     def test_initialization_invalid_no_predict_method(self):
         """Model without predict() should raise error."""
+
         class BadModel:
             pass
 
@@ -235,12 +232,12 @@ class TestNonlinearThenRIRProcessing:
         x = np.random.randn(100)
 
         # FFT convolution
-        config_fft = AcousticChainConfig(rir_method='fft', trim_output=True)
+        config_fft = AcousticChainConfig(rir_method="fft", trim_output=True)
         chain_fft = NonlinearThenRIR(nl_model, rir, config=config_fft)
         y_fft = chain_fft.process(x)
 
         # Direct convolution
-        config_direct = AcousticChainConfig(rir_method='direct', trim_output=True)
+        config_direct = AcousticChainConfig(rir_method="direct", trim_output=True)
         chain_direct = NonlinearThenRIR(nl_model, rir, config=config_direct)
         y_direct = chain_direct.process(x)
 
@@ -277,11 +274,7 @@ class TestNonlinearThenRIRNormalization:
     def test_normalize_rir_stereo(self):
         """Normalization should work per-channel for stereo."""
         nl_model = MockNonlinearModel()
-        rir_stereo = np.array([
-            [1.0, 2.0],
-            [2.0, 3.0],
-            [3.0, 1.0]
-        ])
+        rir_stereo = np.array([[1.0, 2.0], [2.0, 3.0], [3.0, 1.0]])
 
         config = AcousticChainConfig(normalize_rir=True)
         chain = NonlinearThenRIR(nl_model, rir_stereo, config=config)
@@ -308,11 +301,7 @@ class TestNonlinearThenRIRAccessors:
     def test_get_rir_stereo(self):
         """get_rir() should return correct channel for stereo."""
         nl_model = MockNonlinearModel()
-        rir_stereo = np.array([
-            [1.0, 2.0],
-            [0.5, 1.5],
-            [0.25, 1.0]
-        ])
+        rir_stereo = np.array([[1.0, 2.0], [0.5, 1.5], [0.25, 1.0]])
 
         chain = NonlinearThenRIR(nl_model, rir_stereo)
 

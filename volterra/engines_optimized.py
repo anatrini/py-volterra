@@ -9,11 +9,13 @@ Mathematical correctness improvements:
 """
 
 import numpy as np
-from scipy.signal import fftconvolve, oaconvolve
-from volterra.kernels_full import VolterraKernelFull, ArrayF
+from scipy.signal import fftconvolve
+
+from volterra.kernels_full import ArrayF, VolterraKernelFull
 
 try:
     from numba import njit, prange
+
     NUMBA_AVAILABLE = True
 except ImportError:
     NUMBA_AVAILABLE = False
@@ -40,10 +42,7 @@ class OptimizedDiagonalEngine:
         self.use_fft_threshold = use_fft_threshold
 
     def process_block(
-        self,
-        x_block: ArrayF,
-        x_history: ArrayF,
-        kernel: VolterraKernelFull
+        self, x_block: ArrayF, x_history: ArrayF, kernel: VolterraKernelFull
     ) -> ArrayF:
         B = len(x_block)
         N = kernel.N
@@ -58,7 +57,7 @@ class OptimizedDiagonalEngine:
         y = np.zeros(B, dtype=np.float64)
 
         # Decide convolution method based on kernel length
-        use_fft = N > self.use_fft_threshold
+        use_fft = self.use_fft_threshold < N
 
         # Linear term (h1)
         y += self._convolve(powers[1], kernel.h1, B, use_fft)
@@ -117,13 +116,7 @@ class OptimizedDiagonalEngine:
 
         return powers
 
-    def _convolve(
-        self,
-        x_pow: ArrayF,
-        h: ArrayF,
-        B: int,
-        use_fft: bool
-    ) -> ArrayF:
+    def _convolve(self, x_pow: ArrayF, h: ArrayF, B: int, use_fft: bool) -> ArrayF:
         """
         Convolve pre-computed power with kernel.
 
@@ -133,21 +126,15 @@ class OptimizedDiagonalEngine:
 
         if use_fft:
             # FFT convolution for long kernels (more efficient)
-            full = fftconvolve(x_pow, h, mode='full')
+            full = fftconvolve(x_pow, h, mode="full")
             # Extract B samples starting from position N-1 (valid convolution region)
             start = N - 1
-            return full[start:start+B]
+            return full[start : start + B]
         else:
             # Direct time-domain convolution
             return self._convolve_direct(x_pow, h, B, N)
 
-    def _convolve_direct(
-        self,
-        x_ext: ArrayF,
-        h: ArrayF,
-        B: int,
-        N: int
-    ) -> ArrayF:
+    def _convolve_direct(self, x_ext: ArrayF, h: ArrayF, B: int, N: int) -> ArrayF:
         """
         Direct time-domain convolution.
 
@@ -163,13 +150,7 @@ class OptimizedDiagonalEngine:
 
         return y
 
-    def _convolve_full_h2(
-        self,
-        x_ext: ArrayF,
-        h2: ArrayF,
-        B: int,
-        N: int
-    ) -> ArrayF:
+    def _convolve_full_h2(self, x_ext: ArrayF, h2: ArrayF, B: int, N: int) -> ArrayF:
         """Full h2 matrix convolution (backward compatibility)."""
         y = np.zeros(B, dtype=np.float64)
 
@@ -194,10 +175,7 @@ class OptimizedDiagonalEngine:
 if NUMBA_AVAILABLE:
 
     @njit(fastmath=True, cache=True)
-    def _compute_powers_numba(
-        x: np.ndarray,
-        max_order: int
-    ) -> tuple:
+    def _compute_powers_numba(x: np.ndarray, max_order: int) -> tuple:
         """
         Compute all required powers using optimal chain.
 
@@ -228,12 +206,7 @@ if NUMBA_AVAILABLE:
         return (x1, x2, x3, x4, x5)
 
     @njit(parallel=True, fastmath=True, cache=True)
-    def _convolve_direct_numba(
-        x_pow: np.ndarray,
-        h: np.ndarray,
-        B: int,
-        N: int
-    ) -> np.ndarray:
+    def _convolve_direct_numba(x_pow: np.ndarray, h: np.ndarray, B: int, N: int) -> np.ndarray:
         """Fast direct convolution with Numba parallelization."""
         y = np.zeros(B, dtype=np.float64)
 
@@ -246,7 +219,6 @@ if NUMBA_AVAILABLE:
             y[n] = accum
 
         return y
-
 
     class OptimizedNumbaEngine:
         """
@@ -273,10 +245,7 @@ if NUMBA_AVAILABLE:
             _ = _convolve_direct_numba(x_test, h_test, 512, 512)
 
         def process_block(
-            self,
-            x_block: ArrayF,
-            x_history: ArrayF,
-            kernel: VolterraKernelFull
+            self, x_block: ArrayF, x_history: ArrayF, kernel: VolterraKernelFull
         ) -> ArrayF:
             B = len(x_block)
             N = kernel.N

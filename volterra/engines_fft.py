@@ -13,13 +13,14 @@ Performance targets:
 - Kernel precomputation: ~10-40% speedup
 """
 
-from typing import Optional, Dict
 import numpy as np
 from scipy import fft
-from volterra.kernels_full import VolterraKernelFull, ArrayF
+
+from volterra.kernels_full import ArrayF, VolterraKernelFull
 
 try:
     from numba import njit, prange
+
     NUMBA_AVAILABLE = True
 except ImportError:
     NUMBA_AVAILABLE = False
@@ -43,10 +44,7 @@ class FFTOptimizedEngine:
     """
 
     def __init__(
-        self,
-        kernel: VolterraKernelFull,
-        fft_threshold: int = 128,
-        max_block_size: int = 4096
+        self, kernel: VolterraKernelFull, fft_threshold: int = 128, max_block_size: int = 4096
     ):
         """
         Initialize FFT engine with kernel precomputation.
@@ -61,7 +59,7 @@ class FFTOptimizedEngine:
         self.max_block_size = max_block_size
 
         # Determine if we use FFT
-        self.use_fft = kernel.N >= fft_threshold
+        self.use_fft = fft_threshold <= kernel.N
 
         if self.use_fft:
             # Precompute optimal FFT size and kernel FFTs
@@ -89,29 +87,26 @@ class FFTOptimizedEngine:
         self._fft_kernels = {}
 
         # h1 (always present)
-        self._fft_kernels['h1'] = fft.rfft(self.kernel.h1, n=self._fft_size)
+        self._fft_kernels["h1"] = fft.rfft(self.kernel.h1, n=self._fft_size)
 
         # h2 diagonal
         if self.kernel.h2 is not None and self.kernel.h2_is_diagonal:
-            self._fft_kernels['h2'] = fft.rfft(self.kernel.h2, n=self._fft_size)
+            self._fft_kernels["h2"] = fft.rfft(self.kernel.h2, n=self._fft_size)
 
         # h3 diagonal
         if self.kernel.h3_diagonal is not None:
-            self._fft_kernels['h3'] = fft.rfft(self.kernel.h3_diagonal, n=self._fft_size)
+            self._fft_kernels["h3"] = fft.rfft(self.kernel.h3_diagonal, n=self._fft_size)
 
         # h4 diagonal
         if self.kernel.h4_diagonal is not None:
-            self._fft_kernels['h4'] = fft.rfft(self.kernel.h4_diagonal, n=self._fft_size)
+            self._fft_kernels["h4"] = fft.rfft(self.kernel.h4_diagonal, n=self._fft_size)
 
         # h5 diagonal
         if self.kernel.h5_diagonal is not None:
-            self._fft_kernels['h5'] = fft.rfft(self.kernel.h5_diagonal, n=self._fft_size)
+            self._fft_kernels["h5"] = fft.rfft(self.kernel.h5_diagonal, n=self._fft_size)
 
     def process_block(
-        self,
-        x_block: ArrayF,
-        x_history: ArrayF,
-        kernel: VolterraKernelFull
+        self, x_block: ArrayF, x_history: ArrayF, kernel: VolterraKernelFull
     ) -> ArrayF:
         """
         Process block with optimal FFT convolution.
@@ -138,19 +133,19 @@ class FFTOptimizedEngine:
 
         if self.use_fft:
             # FFT-based convolution with precomputed kernels
-            y += self._fft_convolve(powers[1], self._fft_kernels['h1'], B, kernel.h1)
+            y += self._fft_convolve(powers[1], self._fft_kernels["h1"], B, kernel.h1)
 
             if kernel.h2 is not None and kernel.h2_is_diagonal:
-                y += self._fft_convolve(powers[2], self._fft_kernels['h2'], B, kernel.h2)
+                y += self._fft_convolve(powers[2], self._fft_kernels["h2"], B, kernel.h2)
 
             if kernel.h3_diagonal is not None:
-                y += self._fft_convolve(powers[3], self._fft_kernels['h3'], B, kernel.h3_diagonal)
+                y += self._fft_convolve(powers[3], self._fft_kernels["h3"], B, kernel.h3_diagonal)
 
             if kernel.h4_diagonal is not None:
-                y += self._fft_convolve(powers[4], self._fft_kernels['h4'], B, kernel.h4_diagonal)
+                y += self._fft_convolve(powers[4], self._fft_kernels["h4"], B, kernel.h4_diagonal)
 
             if kernel.h5_diagonal is not None:
-                y += self._fft_convolve(powers[5], self._fft_kernels['h5'], B, kernel.h5_diagonal)
+                y += self._fft_convolve(powers[5], self._fft_kernels["h5"], B, kernel.h5_diagonal)
 
         else:
             # Time-domain convolution for short kernels
@@ -170,7 +165,7 @@ class FFTOptimizedEngine:
 
         return y
 
-    def _compute_power_chain(self, x: ArrayF, max_order: int) -> Dict[int, ArrayF]:
+    def _compute_power_chain(self, x: ArrayF, max_order: int) -> dict[int, ArrayF]:
         """
         Compute powers using efficient reuse chain.
 
@@ -201,11 +196,7 @@ class FFTOptimizedEngine:
         return powers
 
     def _fft_convolve(
-        self,
-        x_pow: ArrayF,
-        H_fft: np.ndarray,
-        B: int,
-        h_kernel: ArrayF = None
+        self, x_pow: ArrayF, H_fft: np.ndarray, B: int, h_kernel: ArrayF = None
     ) -> ArrayF:
         """
         FFT convolution with precomputed kernel FFT.
@@ -245,15 +236,9 @@ class FFTOptimizedEngine:
         # Extract valid output region
         # For overlap-add: start at position N-1, extract B samples
         start = N - 1
-        return y_full[start:start+B]
+        return y_full[start : start + B]
 
-    def _time_domain_convolve(
-        self,
-        x_ext: ArrayF,
-        h: ArrayF,
-        B: int,
-        N: int
-    ) -> ArrayF:
+    def _time_domain_convolve(self, x_ext: ArrayF, h: ArrayF, B: int, N: int) -> ArrayF:
         """
         Direct time-domain convolution for short kernels.
 
@@ -276,7 +261,7 @@ class FFTOptimizedEngine:
 
             if start_idx >= 0:
                 x_window = x_ext[start_idx:end_idx][::-1]  # Reverse for convolution
-                y[n] = np.dot(h[:len(x_window)], x_window)
+                y[n] = np.dot(h[: len(x_window)], x_window)
 
         return y
 
@@ -285,12 +270,7 @@ class FFTOptimizedEngine:
 if NUMBA_AVAILABLE:
 
     @njit(parallel=True, fastmath=True, cache=True)
-    def _numba_time_domain_convolve(
-        x_ext: np.ndarray,
-        h: np.ndarray,
-        B: int,
-        N: int
-    ) -> np.ndarray:
+    def _numba_time_domain_convolve(x_ext: np.ndarray, h: np.ndarray, B: int, N: int) -> np.ndarray:
         """Numba-optimized time-domain convolution."""
         y = np.zeros(B, dtype=np.float64)
 
@@ -303,7 +283,6 @@ if NUMBA_AVAILABLE:
             y[n] = accum
 
         return y
-
 
     class FFTOptimizedNumbaEngine(FFTOptimizedEngine):
         """
@@ -319,10 +298,7 @@ if NUMBA_AVAILABLE:
         """
 
         def __init__(
-            self,
-            kernel: VolterraKernelFull,
-            fft_threshold: int = 128,
-            max_block_size: int = 4096
+            self, kernel: VolterraKernelFull, fft_threshold: int = 128, max_block_size: int = 4096
         ):
             super().__init__(kernel, fft_threshold, max_block_size)
 
@@ -336,12 +312,6 @@ if NUMBA_AVAILABLE:
             h_test = np.random.randn(128).astype(np.float64)
             _ = _numba_time_domain_convolve(x_test, h_test, 512, 128)
 
-        def _time_domain_convolve(
-            self,
-            x_ext: ArrayF,
-            h: ArrayF,
-            B: int,
-            N: int
-        ) -> ArrayF:
+        def _time_domain_convolve(self, x_ext: ArrayF, h: ArrayF, B: int, N: int) -> ArrayF:
             """Use Numba-accelerated time-domain convolution."""
             return _numba_time_domain_convolve(x_ext, h, B, N)

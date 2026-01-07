@@ -26,7 +26,6 @@ References:
 """
 
 import numpy as np
-from typing import List, Tuple, Optional
 from scipy import linalg
 
 
@@ -71,7 +70,7 @@ def build_delay_matrix(x: np.ndarray, memory_length: int) -> np.ndarray:
 
     for t in range(T_valid):
         # Row t contains x[t+N-1], x[t+N-2], ..., x[t]
-        X_delay[t, :] = x[t+N-1::-1][: N][::-1]
+        X_delay[t, :] = x[t + N - 1 :: -1][:N][::-1]
 
     return X_delay
 
@@ -80,8 +79,8 @@ def build_unfolded_data_matrix(
     X_delay: np.ndarray,
     order: int,
     core_idx: int,
-    left_cores: Optional[List[np.ndarray]] = None,
-    right_cores: Optional[List[np.ndarray]] = None
+    left_cores: list[np.ndarray] | None = None,
+    right_cores: list[np.ndarray] | None = None,
 ) -> np.ndarray:
     """
     Build unfolded data matrix for optimizing a specific TT core.
@@ -139,13 +138,17 @@ def build_unfolded_data_matrix(
     # With orthogonalized cores: contract left and right
     # Left contraction: cores 0 to k-1
     if left_cores is not None and len(left_cores) > 0:
-        # Contract left cores with delay data
+        # Contract left cores with delay data sequentially
         left_product = np.ones((T_valid, 1))  # Start with (T_valid, 1)
         for lc in left_cores:
-            # lc shape: (r_prev, N, r_next)
-            # Contract with X_delay: sum over N dimension
-            # Result: (T_valid, r_next)
-            left_product = np.einsum('ti,ijk->tjk', X_delay, lc).reshape(T_valid, -1)
+            # lc shape: (r_in, N, r_out)
+            # X_delay: (T_valid, N)
+            # Contract X_delay with lc over N dimension: (T, N) @ (r_in, N, r_out) -> (T, r_in, r_out)
+            temp = np.einsum("ti,jik->tjk", X_delay, lc)  # (T_valid, r_in, r_out)
+            # Contract left_product (T, r_prev) with temp (T, r_in, r_out)
+            # r_prev must equal r_in for valid contraction
+            # Batched matrix multiply along time: (T, r_prev) @ (T, r_prev, r_out) -> (T, r_out)
+            left_product = np.einsum("tr,trk->tk", left_product, temp)  # (T_valid, r_out)
 
         r_left = left_product.shape[1]
     else:
@@ -154,11 +157,16 @@ def build_unfolded_data_matrix(
 
     # Right contraction: cores k+1 to M-1
     if right_cores is not None and len(right_cores) > 0:
-        # Contract right cores with delay data
-        right_product = np.ones((T_valid, 1))
+        # Contract right cores with delay data sequentially (reversed order)
+        # For right cores, we process from right to left (reversed)
+        right_product = np.ones((T_valid, 1))  # Start with (T_valid, 1)
         for rc in reversed(right_cores):
-            # Similar contraction
-            right_product = np.einsum('ti,ijk->tjk', X_delay, rc).reshape(T_valid, -1)
+            # rc shape: (r_in, N, r_out)
+            # Contract X_delay (T, N) with rc (r_in, N, r_out) over N
+            temp = np.einsum("ti,jik->tjk", X_delay, rc)  # (T_valid, r_in, r_out)
+            # Contract temp's r_out with right_product's first rank
+            # (T, r_in, r_out) @ (T, r_out) -> (T, r_in)  (contract over r_out)
+            right_product = np.einsum("tij,tj->ti", temp, right_product)  # (T_valid, r_in)
 
         r_right = right_product.shape[1]
     else:
@@ -167,17 +175,14 @@ def build_unfolded_data_matrix(
 
     # Combine: Phi = kron(left_product, X_delay, right_product)
     # Shape: (T_valid, r_left * N * r_right)
-    Phi = np.einsum('ti,tj,tk->tijk', left_product, X_delay, right_product)
+    Phi = np.einsum("ti,tj,tk->tijk", left_product, X_delay, right_product)
     Phi = Phi.reshape(T_valid, r_left * N * r_right)
 
     return Phi
 
 
 def solve_core_least_squares(
-    Phi: np.ndarray,
-    y: np.ndarray,
-    core_shape: Tuple[int, int, int],
-    regularization: float = 1e-8
+    Phi: np.ndarray, y: np.ndarray, core_shape: tuple[int, int, int], regularization: float = 1e-8
 ) -> np.ndarray:
     """
     Solve least squares for a single TT core.
@@ -214,7 +219,7 @@ def solve_core_least_squares(
     b = Phi.T @ y
 
     # Solve
-    core_vec = linalg.solve(A, b, assume_a='pos')
+    core_vec = linalg.solve(A, b, assume_a="pos")
 
     # Reshape to core
     core = core_vec.reshape(core_shape)
@@ -223,9 +228,8 @@ def solve_core_least_squares(
 
 
 def qr_orthogonalize_core(
-    core: np.ndarray,
-    direction: str = 'left'
-) -> Tuple[np.ndarray, np.ndarray]:
+    core: np.ndarray, direction: str = "left"
+) -> tuple[np.ndarray, np.ndarray]:
     """
     QR orthogonalize a TT core.
 
@@ -251,7 +255,7 @@ def qr_orthogonalize_core(
     """
     r_left, N, r_right = core.shape
 
-    if direction == 'left':
+    if direction == "left":
         # Reshape to (r_left * N, r_right)
         core_mat = core.reshape(r_left * N, r_right)
 
@@ -267,7 +271,7 @@ def qr_orthogonalize_core(
 
         return Q_core, R
 
-    elif direction == 'right':
+    elif direction == "right":
         # Reshape to (r_left, N * r_right)
         core_mat = core.reshape(r_left, N * r_right)
 
@@ -294,12 +298,12 @@ def tt_als_full(
     y: np.ndarray,
     memory_length: int,
     order: int,
-    ranks: List[int],
+    ranks: list[int],
     max_iter: int = 100,
     tol: float = 1e-6,
     regularization: float = 1e-8,
-    verbose: bool = False
-) -> Tuple[List[np.ndarray], dict]:
+    verbose: bool = False,
+) -> tuple[list[np.ndarray], dict]:
     """
     Full TT-ALS solver for Volterra identification.
 
@@ -360,7 +364,7 @@ def tt_als_full(
     # Trim y to match
     if len(y) != len(x):
         raise ValueError("x and y must have same length")
-    y_valid = y[N-1:]  # Align with delay matrix
+    y_valid = y[N - 1 :]  # Align with delay matrix
 
     if len(y_valid) != T_valid:
         y_valid = y_valid[:T_valid]
@@ -369,7 +373,7 @@ def tt_als_full(
     cores = []
     for k in range(M):
         r_left = ranks[k]
-        r_right = ranks[k+1]
+        r_right = ranks[k + 1]
         core = np.random.randn(r_left, N, r_right) / np.sqrt(N * r_left * r_right)
         cores.append(core)
 
@@ -382,33 +386,29 @@ def tt_als_full(
         for k in range(M):
             # Left orthogonalize cores 0 to k-1
             for j in range(k):
-                cores[j], R = qr_orthogonalize_core(cores[j], direction='left')
+                cores[j], R = qr_orthogonalize_core(cores[j], direction="left")
                 # Absorb R into next core
                 if j < M - 1:
                     # Contract R (r_new, r_old) with cores[j+1] (r_old, N, r_next)
-                    cores[j+1] = np.einsum('ij,jkl->ikl', R, cores[j+1])
+                    cores[j + 1] = np.einsum("ij,jkl->ikl", R, cores[j + 1])
 
             # Right orthogonalize cores k+1 to M-1
-            for j in range(M-1, k, -1):
-                cores[j], R = qr_orthogonalize_core(cores[j], direction='right')
+            for j in range(M - 1, k, -1):
+                cores[j], R = qr_orthogonalize_core(cores[j], direction="right")
                 # Absorb R into previous core
                 if j > 0:
                     # Contract cores[j-1] (r_prev, N, r_old) with R (r_old, r_new)
-                    cores[j-1] = np.einsum('ijk,kl->ijl', cores[j-1], R)
+                    cores[j - 1] = np.einsum("ijk,kl->ijl", cores[j - 1], R)
 
             # Build data matrix for core k
             left_cores = cores[:k] if k > 0 else None
-            right_cores = cores[k+1:] if k < M-1 else None
+            right_cores = cores[k + 1 :] if k < M - 1 else None
 
-            Phi = build_unfolded_data_matrix(
-                X_delay, M, k, left_cores, right_cores
-            )
+            Phi = build_unfolded_data_matrix(X_delay, M, k, left_cores, right_cores)
 
             # Solve for core k
             core_shape = cores[k].shape
-            cores[k] = solve_core_least_squares(
-                Phi, y_valid, core_shape, regularization
-            )
+            cores[k] = solve_core_least_squares(Phi, y_valid, core_shape, regularization)
 
         # Compute loss
         y_pred = evaluate_tt_volterra(cores, X_delay)
@@ -418,8 +418,10 @@ def tt_als_full(
         # Check convergence
         rel_change = abs(loss - prev_loss) / (abs(prev_loss) + 1e-12)
         if verbose:
-            print(f"Iteration {iteration+1}/{max_iter}: loss={loss:.6e}, "
-                  f"rel_change={rel_change:.6e}")
+            print(
+                f"Iteration {iteration+1}/{max_iter}: loss={loss:.6e}, "
+                f"rel_change={rel_change:.6e}"
+            )
 
         if rel_change < tol:
             if verbose:
@@ -434,16 +436,16 @@ def tt_als_full(
             print(f"Max iterations ({max_iter}) reached without convergence")
 
     info = {
-        'loss_history': loss_history,
-        'iterations': len(loss_history),
-        'converged': converged,
-        'final_loss': loss_history[-1] if loss_history else np.inf
+        "loss_history": loss_history,
+        "iterations": len(loss_history),
+        "converged": converged,
+        "final_loss": loss_history[-1] if loss_history else np.inf,
     }
 
     return cores, info
 
 
-def evaluate_tt_volterra(cores: List[np.ndarray], X_delay: np.ndarray) -> np.ndarray:
+def evaluate_tt_volterra(cores: list[np.ndarray], X_delay: np.ndarray) -> np.ndarray:
     """
     Evaluate TT-Volterra model on delay matrix.
 

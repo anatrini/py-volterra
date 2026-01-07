@@ -6,9 +6,10 @@ Volterra series (3rd-5th order), reducing memory complexity from O(N^k) to O(N).
 """
 
 from __future__ import annotations
+
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional, Dict
+
 import numpy as np
 import numpy.typing as npt
 
@@ -37,12 +38,12 @@ class VolterraKernelFull:
     for typical audio distortion applications while being real-time compatible.
     """
 
-    h1: ArrayF                           # Linear kernel (N,)
-    h2: Optional[ArrayF] = None          # 2nd order (N,N) symmetric, or diagonal (N,)
-    h3_diagonal: Optional[ArrayF] = None # 3rd order diagonal (N,)
-    h4_diagonal: Optional[ArrayF] = None # 4th order diagonal (N,)
-    h5_diagonal: Optional[ArrayF] = None # 5th order diagonal (N,)
-    h2_is_diagonal: bool = False         # Flag for h2 storage format
+    h1: ArrayF  # Linear kernel (N,)
+    h2: ArrayF | None = None  # 2nd order (N,N) symmetric, or diagonal (N,)
+    h3_diagonal: ArrayF | None = None  # 3rd order diagonal (N,)
+    h4_diagonal: ArrayF | None = None  # 4th order diagonal (N,)
+    h5_diagonal: ArrayF | None = None  # 5th order diagonal (N,)
+    h2_is_diagonal: bool = False  # Flag for h2 storage format
 
     def __post_init__(self):
         """Validate and enforce kernel constraints."""
@@ -116,7 +117,7 @@ class VolterraKernelFull:
         np.savez_compressed(path, **save_dict)
 
     @staticmethod
-    def from_npz(path: Path) -> "VolterraKernelFull":
+    def from_npz(path: Path) -> VolterraKernelFull:
         """Load kernels from NPZ file."""
         data = np.load(path)
 
@@ -126,18 +127,13 @@ class VolterraKernelFull:
             h3_diagonal=data.get("h3_diagonal"),
             h4_diagonal=data.get("h4_diagonal"),
             h5_diagonal=data.get("h5_diagonal"),
-            h2_is_diagonal=bool(data.get("h2_is_diagonal", False))
+            h2_is_diagonal=bool(data.get("h2_is_diagonal", False)),
         )
 
     @staticmethod
     def from_polynomial_coeffs(
-        N: int,
-        a1: float = 1.0,
-        a2: float = 0.0,
-        a3: float = 0.0,
-        a4: float = 0.0,
-        a5: float = 0.0
-    ) -> "VolterraKernelFull":
+        N: int, a1: float = 1.0, a2: float = 0.0, a3: float = 0.0, a4: float = 0.0, a5: float = 0.0
+    ) -> VolterraKernelFull:
         """
         Create memoryless polynomial kernel: y = a1·x + a2·x² + a3·x³ + a4·x⁴ + a5·x⁵
 
@@ -167,12 +163,7 @@ class VolterraKernelFull:
             h5[0] = a5
 
         return VolterraKernelFull(
-            h1=h1,
-            h2=h2,
-            h3_diagonal=h3,
-            h4_diagonal=h4,
-            h5_diagonal=h5,
-            h2_is_diagonal=True
+            h1=h1, h2=h2, h3_diagonal=h3, h4_diagonal=h4, h5_diagonal=h5, h2_is_diagonal=True
         )
 
     def estimate_memory_bytes(self) -> int:
@@ -190,7 +181,7 @@ class VolterraKernelFull:
 
         return size
 
-    def to_dict(self) -> Dict[str, ArrayF]:
+    def to_dict(self) -> dict[str, ArrayF]:
         """Export kernels as dictionary for compatibility."""
         result = {"h1": self.h1}
 

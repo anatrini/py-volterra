@@ -11,14 +11,15 @@ These tests verify:
 Critical for Session 3: Algorithm Selection & FFT Optimization
 """
 
-import pytest
 import numpy as np
+import pytest
 from numpy.testing import assert_allclose
 
 from volterra import VolterraKernelFull, VolterraProcessorFull
 
 try:
-    from volterra.engines_fft import FFTOptimizedEngine, FFTOptimizedNumbaEngine, NUMBA_AVAILABLE
+    from volterra.engines_fft import NUMBA_AVAILABLE, FFTOptimizedEngine, FFTOptimizedNumbaEngine
+
     FFT_ENGINES_AVAILABLE = True
 except ImportError:
     FFT_ENGINES_AVAILABLE = False
@@ -38,23 +39,13 @@ class TestFFTEngineCorrectness:
     def kernel_long(self):
         """Long kernel (N=512) where FFT is beneficial."""
         return VolterraKernelFull.from_polynomial_coeffs(
-            N=512,
-            a1=1.0,
-            a2=0.15,
-            a3=0.03,
-            a4=0.01,
-            a5=0.02
+            N=512, a1=1.0, a2=0.15, a3=0.03, a4=0.01, a5=0.02
         )
 
     @pytest.fixture
     def kernel_short(self):
         """Short kernel (N=64) where time-domain is faster."""
-        return VolterraKernelFull.from_polynomial_coeffs(
-            N=64,
-            a1=1.0,
-            a2=0.15,
-            a3=0.03
-        )
+        return VolterraKernelFull.from_polynomial_coeffs(N=64, a1=1.0, a2=0.15, a3=0.03)
 
     @pytest.fixture
     def test_signal(self, sample_rate):
@@ -88,7 +79,7 @@ class TestFFTEngineCorrectness:
 
         # 3. Verify equivalence
         max_diff = np.max(np.abs(output_time - output_fft))
-        rms_diff = np.sqrt(np.mean((output_time - output_fft)**2))
+        rms_diff = np.sqrt(np.mean((output_time - output_fft) ** 2))
 
         assert max_diff < 1e-10, f"FFT vs time-domain max diff {max_diff:.2e} > 1e-10"
         assert rms_diff < 1e-11, f"FFT vs time-domain RMS diff {rms_diff:.2e} > 1e-11"
@@ -100,10 +91,10 @@ class TestFFTEngineCorrectness:
         # Should have precomputed FFT kernels
         assert engine.use_fft is True
         assert engine._fft_kernels is not None
-        assert 'h1' in engine._fft_kernels
-        assert 'h2' in engine._fft_kernels
-        assert 'h3' in engine._fft_kernels
-        assert 'h5' in engine._fft_kernels
+        assert "h1" in engine._fft_kernels
+        assert "h2" in engine._fft_kernels
+        assert "h3" in engine._fft_kernels
+        assert "h5" in engine._fft_kernels
 
         # FFT size should be >= N + B_max - 1
         N = kernel_long.N
@@ -112,7 +103,7 @@ class TestFFTEngineCorrectness:
 
         # Check FFT kernels have correct shape (rfft output)
         expected_fft_len = engine._fft_size // 2 + 1
-        assert len(engine._fft_kernels['h1']) == expected_fft_len
+        assert len(engine._fft_kernels["h1"]) == expected_fft_len
 
     def test_auto_selection_long_kernel(self, kernel_long, sample_rate):
         """Processor should auto-select FFT for long kernels (N>=128)."""
@@ -128,6 +119,7 @@ class TestFFTEngineCorrectness:
 
         # Should have selected vectorized engine (faster than DiagonalNumpyEngine)
         from volterra.engines_vectorized import VectorizedEngine
+
         assert isinstance(proc.engine, VectorizedEngine)
 
     def test_fft_engine_different_block_sizes(self, kernel_long, test_signal, sample_rate):
@@ -163,7 +155,7 @@ class TestFFTEngineCorrectness:
 
         # Precomputed FFT should be complex with length N//2+1 (rfft output)
         fft_len = engine._fft_size // 2 + 1
-        h1_fft = engine._fft_kernels['h1']
+        h1_fft = engine._fft_kernels["h1"]
 
         assert len(h1_fft) == fft_len
         assert h1_fft.dtype == np.complex128  # rfft output is complex
@@ -199,9 +191,9 @@ class TestFFTEngineCorrectness:
         assert 5 in powers
 
         # Verify power correctness
-        assert_allclose(powers[2], x_ext ** 2)
-        assert_allclose(powers[3], x_ext ** 3)
-        assert_allclose(powers[5], x_ext ** 5)
+        assert_allclose(powers[2], x_ext**2)
+        assert_allclose(powers[3], x_ext**3)
+        assert_allclose(powers[5], x_ext**5)
 
 
 class TestFFTPerformance:
@@ -242,7 +234,7 @@ class TestFFTPerformance:
         engine = FFTOptimizedEngine(kernel, fft_threshold=128)
 
         # Get precomputed FFT
-        h1_fft_before = engine._fft_kernels['h1'].copy()
+        h1_fft_before = engine._fft_kernels["h1"].copy()
 
         # Process a block
         x_block = np.random.randn(512) * 0.1
@@ -250,7 +242,7 @@ class TestFFTPerformance:
         _ = engine.process_block(x_block, x_history, kernel)
 
         # FFT kernel should be unchanged (precomputed)
-        h1_fft_after = engine._fft_kernels['h1']
+        h1_fft_after = engine._fft_kernels["h1"]
         assert_allclose(h1_fft_before, h1_fft_after)
 
 

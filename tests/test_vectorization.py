@@ -10,16 +10,16 @@ These tests ensure:
 Critical for Session 4: Performance & Memory Efficiency
 """
 
-import pytest
 import numpy as np
+import pytest
 from numpy.testing import assert_allclose
 
 from volterra import VolterraKernelFull, VolterraProcessorFull
-from volterra.engines_vectorized import VectorizedEngine
 from volterra.engines_diagonal import DiagonalNumpyEngine
+from volterra.engines_vectorized import VectorizedEngine
 
 try:
-    from volterra.engines_diagonal import DiagonalNumbaEngine, NUMBA_AVAILABLE
+    from volterra.engines_diagonal import NUMBA_AVAILABLE, DiagonalNumbaEngine
 except ImportError:
     NUMBA_AVAILABLE = False
 
@@ -35,12 +35,7 @@ class TestVectorizedCorrectness:
     def kernel_realistic(self):
         """Realistic kernel with multiple orders."""
         return VolterraKernelFull.from_polynomial_coeffs(
-            N=256,
-            a1=1.0,
-            a2=0.15,
-            a3=0.03,
-            a4=0.01,
-            a5=0.02
+            N=256, a1=1.0, a2=0.15, a3=0.03, a4=0.01, a5=0.02
         )
 
     @pytest.fixture
@@ -69,7 +64,7 @@ class TestVectorizedCorrectness:
 
         # 3. Verify equivalence
         max_diff = np.max(np.abs(output_ref - output_vec))
-        rms_diff = np.sqrt(np.mean((output_ref - output_vec)**2))
+        rms_diff = np.sqrt(np.mean((output_ref - output_vec) ** 2))
 
         assert max_diff < 1e-10, f"Vectorized vs NumPy max diff {max_diff:.2e} > 1e-10"
         assert rms_diff < 1e-11, f"Vectorized vs NumPy RMS diff {rms_diff:.2e} > 1e-11"
@@ -78,7 +73,9 @@ class TestVectorizedCorrectness:
     def test_vectorized_vs_numba_engine(self, kernel_realistic, test_signal, sample_rate):
         """Verify vectorized engine matches Numba implementation."""
         # 1. Numba engine
-        proc_numba = VolterraProcessorFull(kernel_realistic, sample_rate=sample_rate, use_numba=True)
+        proc_numba = VolterraProcessorFull(
+            kernel_realistic, sample_rate=sample_rate, use_numba=True
+        )
         proc_numba.engine = DiagonalNumbaEngine()
         output_numba = proc_numba.process(test_signal, block_size=512)
 
@@ -133,12 +130,12 @@ class TestVectorizedCorrectness:
         output = engine.process_block(x_block, x_history, kernel_realistic)
 
         # Check output is C-contiguous
-        assert output.flags['C_CONTIGUOUS']
+        assert output.flags["C_CONTIGUOUS"]
 
         # Check internal buffers
-        assert engine._y_buffer.flags['C_CONTIGUOUS']
+        assert engine._y_buffer.flags["C_CONTIGUOUS"]
         for power_buf in engine._power_buffers.values():
-            assert power_buf.flags['C_CONTIGUOUS']
+            assert power_buf.flags["C_CONTIGUOUS"]
 
     def test_dtype_consistency(self, kernel_realistic, sample_rate):
         """Verify consistent float64 dtype (no silent upcasting)."""
@@ -174,7 +171,7 @@ class TestVectorizationPerformance:
 
         Should compute x², x³, x⁴, x⁵ with optimal chain (4 mults per sample).
         """
-        kernel = kernels_various[256]
+        kernels_various[256]
         engine = VectorizedEngine(max_block_size=4096)
 
         x_test = np.random.randn(1024).astype(np.float64)
@@ -190,9 +187,9 @@ class TestVectorizationPerformance:
         assert 5 in powers
 
         # Verify correctness
-        assert_allclose(powers[2], x_test ** 2)
-        assert_allclose(powers[3], x_test ** 3)
-        assert_allclose(powers[5], x_test ** 5)
+        assert_allclose(powers[2], x_test**2)
+        assert_allclose(powers[3], x_test**3)
+        assert_allclose(powers[5], x_test**5)
 
     def test_no_temporary_allocations_in_accumulate(self, kernels_various):
         """
@@ -207,7 +204,7 @@ class TestVectorizationPerformance:
         N = kernel.N
 
         y = np.zeros(B, dtype=np.float64)
-        y_id_before = id(y)
+        id(y)
 
         x_pow = np.random.randn(B + N - 1).astype(np.float64)
         h = kernel.h1
@@ -265,8 +262,8 @@ class TestMemoryEfficiency:
 
         # Get initial buffer IDs
         initial_ids = {
-            'y': id(engine._y_buffer),
-            'powers': {order: id(buf) for order, buf in engine._power_buffers.items()}
+            "y": id(engine._y_buffer),
+            "powers": {order: id(buf) for order, buf in engine._power_buffers.items()},
         }
 
         # Process many blocks
@@ -277,8 +274,8 @@ class TestMemoryEfficiency:
             _ = engine.process_block(x_block, x_history, kernel)
 
         # Verify buffers not reallocated
-        assert id(engine._y_buffer) == initial_ids['y']
-        for order, buf_id in initial_ids['powers'].items():
+        assert id(engine._y_buffer) == initial_ids["y"]
+        for order, buf_id in initial_ids["powers"].items():
             assert id(engine._power_buffers[order]) == buf_id
 
     def test_in_place_operations(self):
@@ -297,5 +294,5 @@ class TestMemoryEfficiency:
         # Verify in-place multiplication was used
         # (values in power buffer should match x²)
         expected_x2 = x * x
-        actual_x2 = engine._power_buffers[2][:len(x)]
+        actual_x2 = engine._power_buffers[2][: len(x)]
         assert_allclose(actual_x2, expected_x2)

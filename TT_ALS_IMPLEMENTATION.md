@@ -272,10 +272,10 @@ Recovered coefficients: `[0.8000000001, 0.2000000000, 0.0499999999]`
 
 ## References
 
-1. Boyd, S., Tang, Y.Y., & Chua, L.O. (1983). "Measuring Volterra kernels", IEEE Trans. Circuits and Systems
+1. Boyd, S., Tang, Y.Y., & Chua, L.O. (1983). "Measuring Volterra kernels", IEEE Trans. Circuits and Systems, 30(8), 571-577. DOI: [10.1109/TCS.1983.1085391](https://doi.org/10.1109/TCS.1983.1085391)
 2. Schetzen, M. (1980). "The Volterra and Wiener Theories of Nonlinear Systems", Wiley
-3. Oseledets, I.V. (2011). "Tensor-Train Decomposition", SIAM J. Sci. Comput.
-4. Novak, A. et al. (2015). "Synchronized Swept-Sine", JAES (for comparison)
+3. Oseledets, I.V. (2011). "Tensor-Train Decomposition", SIAM J. Sci. Comput., 33(5), 2295-2317. DOI: [10.1137/090752286](https://doi.org/10.1137/090752286)
+4. Novak, A., Lotton, P., & Simon, L. (2015). "Synchronized Swept-Sine: Theory, Application, and Implementation", JAES, 63(10), 786-798. DOI: [10.17743/jaes.2015.0071](https://doi.org/10.17743/jaes.2015.0071)
 
 ## Conclusion
 
@@ -599,10 +599,10 @@ print(f"Final MSE: {identifier.fit_info_['per_output'][0]['final_mse']:.6e}")
 
 ## References
 
-1. Boyd, S., Tang, Y.Y., & Chua, L.O. (1983). "Measuring Volterra kernels", IEEE Trans. Circuits and Systems
+1. Boyd, S., Tang, Y.Y., & Chua, L.O. (1983). "Measuring Volterra kernels", IEEE Trans. Circuits and Systems, 30(8), 571-577. DOI: [10.1109/TCS.1983.1085391](https://doi.org/10.1109/TCS.1983.1085391)
 2. Schetzen, M. (1980). "The Volterra and Wiener Theories of Nonlinear Systems", Wiley
-3. Oseledets, I.V. (2011). "Tensor-Train Decomposition", SIAM J. Sci. Comput.
-4. Novak, A. et al. (2015). "Synchronized Swept-Sine", JAES
+3. Oseledets, I.V. (2011). "Tensor-Train Decomposition", SIAM J. Sci. Comput., 33(5), 2295-2317. DOI: [10.1137/090752286](https://doi.org/10.1137/090752286)
+4. Novak, A., Lotton, P., & Simon, L. (2015). "Synchronized Swept-Sine: Theory, Application, and Implementation", JAES, 63(10), 786-798. DOI: [10.17743/jaes.2015.0071](https://doi.org/10.17743/jaes.2015.0071)
 5. **Haykin, S. (2002). "Adaptive Filter Theory" (4th ed.), Prentice Hall** *(for RLS)*
 6. **Diniz, P.S.R. (2013). "Adaptive Filtering: Algorithms and Practical Implementation", Springer** *(for RLS)*
 

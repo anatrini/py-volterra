@@ -8,11 +8,11 @@ These tests verify:
 4. RLS adaptation on time-varying systems
 """
 
-import pytest
 import numpy as np
+import pytest
 from numpy.testing import assert_allclose
 
-from volterra.models import TTVolterraIdentifier, TTVolterraConfig
+from volterra.models import TTVolterraConfig, TTVolterraIdentifier
 
 
 class TestMIMODiagonalVolterra:
@@ -27,21 +27,20 @@ class TestMIMODiagonalVolterra:
         b1, b2 = 0.5, 0.1  # Coefficients for input 2
 
         x = np.random.randn(800, 2) * 0.5
-        y = (a1*x[:, 0] + a2*x[:, 0]**2 +
-             b1*x[:, 1] + b2*x[:, 1]**2)
+        y = a1 * x[:, 0] + a2 * x[:, 0] ** 2 + b1 * x[:, 1] + b2 * x[:, 1] ** 2
 
         identifier = TTVolterraIdentifier(
             memory_length=1,
             order=2,
             ranks=[1, 1, 1],
-            config=TTVolterraConfig(solver='als', max_iter=100, tol=1e-9)
+            config=TTVolterraConfig(solver="als", max_iter=100, tol=1e-9),
         )
         identifier.fit(x, y)
 
         # Check convergence
         assert identifier.is_fitted
-        assert identifier.fit_info_['per_output'][0]['converged']
-        assert identifier.fit_info_['per_output'][0]['final_loss'] < 1e-15
+        assert identifier.fit_info_["per_output"][0]["converged"]
+        assert identifier.fit_info_["per_output"][0]["final_loss"] < 1e-15
 
     def test_mimo_3inputs_linear(self):
         """MIMO with 3 inputs, linear only."""
@@ -57,12 +56,12 @@ class TestMIMODiagonalVolterra:
             memory_length=1,
             order=1,
             ranks=[1, 1],
-            config=TTVolterraConfig(solver='als', max_iter=50)
+            config=TTVolterraConfig(solver="als", max_iter=50),
         )
         identifier.fit(x, y)
 
         assert identifier.is_fitted
-        assert identifier.fit_info_['per_output'][0]['final_loss'] < 1e-10
+        assert identifier.fit_info_["per_output"][0]["final_loss"] < 1e-10
 
     def test_mimo_with_memory(self):
         """MIMO with memory (FIR filters per input)."""
@@ -77,25 +76,25 @@ class TestMIMODiagonalVolterra:
         y = np.zeros(len(x))
 
         # Generate output with memory
-        for t in range(N-1, len(x)):
+        for t in range(N - 1, len(x)):
             for k in range(N):
-                y[t] += h1[k] * x[t-k, 0] + h2[k] * x[t-k, 1]
+                y[t] += h1[k] * x[t - k, 0] + h2[k] * x[t - k, 1]
 
         identifier = TTVolterraIdentifier(
             memory_length=N,
             order=1,
             ranks=[1, 1],
-            config=TTVolterraConfig(solver='als', max_iter=100, tol=1e-8)
+            config=TTVolterraConfig(solver="als", max_iter=100, tol=1e-8),
         )
         identifier.fit(x, y)
 
         assert identifier.is_fitted
-        assert identifier.fit_info_['per_output'][0]['final_loss'] < 1e-10
+        assert identifier.fit_info_["per_output"][0]["final_loss"] < 1e-10
 
     def test_mimo_prediction_shape(self):
         """MIMO prediction returns correct shape."""
         x = np.random.randn(500, 2)
-        y = x[:, 0] + 0.5*x[:, 1]
+        y = x[:, 0] + 0.5 * x[:, 1]
 
         identifier = TTVolterraIdentifier(
             memory_length=10,
@@ -116,23 +115,15 @@ class TestMIMODiagonalVolterra:
         np.random.seed(42)
 
         x_siso = np.random.randn(500)
-        y = 0.8*x_siso + 0.2*x_siso**2
+        y = 0.8 * x_siso + 0.2 * x_siso**2
 
         # SISO model
-        id_siso = TTVolterraIdentifier(
-            memory_length=1,
-            order=2,
-            ranks=[1, 1, 1]
-        )
+        id_siso = TTVolterraIdentifier(memory_length=1, order=2, ranks=[1, 1, 1])
         id_siso.fit(x_siso, y)
 
         # MIMO model with 1 input
         x_mimo = x_siso.reshape(-1, 1)
-        id_mimo = TTVolterraIdentifier(
-            memory_length=1,
-            order=2,
-            ranks=[1, 1, 1]
-        )
+        id_mimo = TTVolterraIdentifier(memory_length=1, order=2, ranks=[1, 1, 1])
         id_mimo.fit(x_mimo, y)
 
         # Both should give same results
@@ -150,23 +141,23 @@ class TestRLSAdaptiveFiltering:
         np.random.seed(42)
 
         x = np.random.randn(2000)
-        y = 0.8*x + 0.1*x**2
+        y = 0.8 * x + 0.1 * x**2
 
         identifier = TTVolterraIdentifier(
             memory_length=1,
             order=2,
             ranks=[1, 1, 1],
             config=TTVolterraConfig(
-                solver='rls',
+                solver="rls",
                 forgetting_factor=1.0,  # Infinite memory for stationary
-                regularization=1e-4
-            )
+                regularization=1e-4,
+            ),
         )
         identifier.fit(x, y)
 
         assert identifier.is_fitted
         # RLS should achieve reasonable MSE on stationary system
-        final_mse = identifier.fit_info_['per_output'][0]['final_mse']
+        final_mse = identifier.fit_info_["per_output"][0]["final_mse"]
         assert final_mse < 0.001
 
     def test_rls_time_varying_system(self):
@@ -179,24 +170,24 @@ class TestRLSAdaptiveFiltering:
         # Coefficient varies sinusoidally
         for t in range(len(x)):
             alpha = 0.8 + 0.2 * np.sin(2 * np.pi * t / 500)
-            y[t] = alpha * x[t] + 0.1 * x[t]**2
+            y[t] = alpha * x[t] + 0.1 * x[t] ** 2
 
         identifier = TTVolterraIdentifier(
             memory_length=1,
             order=2,
             ranks=[1, 1, 1],
             config=TTVolterraConfig(
-                solver='rls',
+                solver="rls",
                 forgetting_factor=0.995,  # Track variations
                 regularization=1e-4,
-                verbose=False
-            )
+                verbose=False,
+            ),
         )
         identifier.fit(x, y)
 
         assert identifier.is_fitted
         # Should achieve reasonable tracking
-        final_mse = identifier.fit_info_['per_output'][0]['final_mse']
+        final_mse = identifier.fit_info_["per_output"][0]["final_mse"]
         assert final_mse < 0.05  # Reasonable for time-varying
 
     def test_rls_with_memory(self):
@@ -209,24 +200,20 @@ class TestRLSAdaptiveFiltering:
         x = np.random.randn(3000)
         y = np.zeros_like(x)
 
-        for t in range(N-1, len(x)):
+        for t in range(N - 1, len(x)):
             for k in range(N):
-                y[t] += h1[k] * x[t-k]
+                y[t] += h1[k] * x[t - k]
 
         identifier = TTVolterraIdentifier(
             memory_length=N,
             order=1,
             ranks=[1, 1],
-            config=TTVolterraConfig(
-                solver='rls',
-                forgetting_factor=1.0,
-                regularization=1e-4
-            )
+            config=TTVolterraConfig(solver="rls", forgetting_factor=1.0, regularization=1e-4),
         )
         identifier.fit(x, y)
 
         assert identifier.is_fitted
-        final_mse = identifier.fit_info_['per_output'][0]['final_mse']
+        final_mse = identifier.fit_info_["per_output"][0]["final_mse"]
         assert final_mse < 0.001
 
     def test_rls_forgetting_factor_effect(self):
@@ -234,18 +221,14 @@ class TestRLSAdaptiveFiltering:
         np.random.seed(42)
 
         x = np.random.randn(2000)
-        y = 0.8*x + 0.1*x**2
+        y = 0.8 * x + 0.1 * x**2
 
         # High forgetting factor (slow adaptation)
         id_slow = TTVolterraIdentifier(
             memory_length=1,
             order=2,
             ranks=[1, 1, 1],
-            config=TTVolterraConfig(
-                solver='rls',
-                forgetting_factor=0.999,
-                regularization=1e-4
-            )
+            config=TTVolterraConfig(solver="rls", forgetting_factor=0.999, regularization=1e-4),
         )
         id_slow.fit(x, y)
 
@@ -254,11 +237,7 @@ class TestRLSAdaptiveFiltering:
             memory_length=1,
             order=2,
             ranks=[1, 1, 1],
-            config=TTVolterraConfig(
-                solver='rls',
-                forgetting_factor=0.95,
-                regularization=1e-4
-            )
+            config=TTVolterraConfig(solver="rls", forgetting_factor=0.95, regularization=1e-4),
         )
         id_fast.fit(x, y)
 
@@ -266,8 +245,8 @@ class TestRLSAdaptiveFiltering:
         assert id_slow.is_fitted
         assert id_fast.is_fitted
 
-        mse_slow = id_slow.fit_info_['per_output'][0]['final_mse']
-        mse_fast = id_fast.fit_info_['per_output'][0]['final_mse']
+        mse_slow = id_slow.fit_info_["per_output"][0]["final_mse"]
+        mse_fast = id_fast.fit_info_["per_output"][0]["final_mse"]
 
         # Fast adaptation may have slightly higher final MSE due to forgetting
         assert mse_slow < 0.001
@@ -278,23 +257,20 @@ class TestRLSAdaptiveFiltering:
         np.random.seed(42)
 
         x = np.random.randn(1000)
-        y = x + 0.1*x**2
+        y = x + 0.1 * x**2
 
         identifier = TTVolterraIdentifier(
-            memory_length=1,
-            order=2,
-            ranks=[1, 1, 1],
-            config=TTVolterraConfig(solver='rls')
+            memory_length=1, order=2, ranks=[1, 1, 1], config=TTVolterraConfig(solver="rls")
         )
         identifier.fit(x, y)
 
         # Check MSE history is available
-        info = identifier.fit_info_['per_output'][0]
-        assert 'mse_history' in info
-        assert len(info['mse_history']) > 0
+        info = identifier.fit_info_["per_output"][0]
+        assert "mse_history" in info
+        assert len(info["mse_history"]) > 0
 
         # MSE should generally decrease over time (may fluctuate)
-        mse_history = info['mse_history']
+        mse_history = info["mse_history"]
         assert mse_history[-1] < mse_history[0] * 0.1  # Final < 10% of initial
 
 
@@ -304,13 +280,10 @@ class TestMIMOandRLSIntegration:
     def test_rls_mimo_warning(self):
         """RLS with MIMO should warn and use first input."""
         x = np.random.randn(500, 2)
-        y = x[:, 0] + 0.1*x[:, 0]**2
+        y = x[:, 0] + 0.1 * x[:, 0] ** 2
 
         identifier = TTVolterraIdentifier(
-            memory_length=1,
-            order=2,
-            ranks=[1, 1, 1],
-            config=TTVolterraConfig(solver='rls')
+            memory_length=1, order=2, ranks=[1, 1, 1], config=TTVolterraConfig(solver="rls")
         )
 
         with pytest.warns(UserWarning, match="RLS solver currently only supports SISO"):
@@ -324,49 +297,39 @@ class TestMIMOandRLSIntegration:
         y = x[:, 0] + x[:, 1]
 
         identifier = TTVolterraIdentifier(
-            memory_length=1,
-            order=1,
-            ranks=[1, 1],
-            config=TTVolterraConfig(solver='als')
+            memory_length=1, order=1, ranks=[1, 1], config=TTVolterraConfig(solver="als")
         )
         identifier.fit(x, y)
 
-        info = identifier.fit_info_['per_output'][0]
-        assert info['mimo'] == True
-        assert info['n_inputs'] == 2
+        info = identifier.fit_info_["per_output"][0]
+        assert info["mimo"]
+        assert info["n_inputs"] == 2
 
     def test_siso_info_stored(self):
         """SISO fit should store MIMO=False."""
         x = np.random.randn(500)
-        y = x + 0.1*x**2
+        y = x + 0.1 * x**2
 
         identifier = TTVolterraIdentifier(
-            memory_length=1,
-            order=2,
-            ranks=[1, 1, 1],
-            config=TTVolterraConfig(solver='als')
+            memory_length=1, order=2, ranks=[1, 1, 1], config=TTVolterraConfig(solver="als")
         )
         identifier.fit(x, y)
 
-        info = identifier.fit_info_['per_output'][0]
-        assert info['mimo'] == False
+        info = identifier.fit_info_["per_output"][0]
+        assert not info["mimo"]
 
     def test_config_rls_parameters(self):
         """TTVolterraConfig should accept RLS parameters."""
-        config = TTVolterraConfig(
-            solver='rls',
-            forgetting_factor=0.98,
-            regularization=1e-3
-        )
+        config = TTVolterraConfig(solver="rls", forgetting_factor=0.98, regularization=1e-3)
 
-        assert config.solver == 'rls'
+        assert config.solver == "rls"
         assert config.forgetting_factor == 0.98
         assert config.regularization == 1e-3
 
     def test_invalid_solver_raises(self):
         """Invalid solver should raise error."""
         with pytest.raises(ValueError, match="Solver must be"):
-            TTVolterraConfig(solver='invalid')
+            TTVolterraConfig(solver="invalid")
 
 
 class TestMIMOEdgeCases:
@@ -377,11 +340,7 @@ class TestMIMOEdgeCases:
         x = np.random.randn(500, 2)
         y = x[:, 0] + x[:, 1]
 
-        identifier = TTVolterraIdentifier(
-            memory_length=1,
-            order=1,
-            ranks=[1, 1]
-        )
+        identifier = TTVolterraIdentifier(memory_length=1, order=1, ranks=[1, 1])
         identifier.fit(x, y)
 
         y_pred = identifier.predict(x)
@@ -396,17 +355,14 @@ class TestMIMOEdgeCases:
         h1 = 0.9 ** np.arange(N)
         h2 = 0.8 ** np.arange(N)
 
-        for t in range(N-1, len(x)):
+        for t in range(N - 1, len(x)):
             for k in range(N):
-                y[t] += h1[k] * x[t-k, 0] + h2[k] * x[t-k, 1]
+                y[t] += h1[k] * x[t - k, 0] + h2[k] * x[t - k, 1]
 
         identifier = TTVolterraIdentifier(
-            memory_length=N,
-            order=1,
-            ranks=[1, 1],
-            config=TTVolterraConfig(max_iter=150, tol=1e-7)
+            memory_length=N, order=1, ranks=[1, 1], config=TTVolterraConfig(max_iter=150, tol=1e-7)
         )
         identifier.fit(x, y)
 
         assert identifier.is_fitted
-        assert identifier.fit_info_['per_output'][0]['final_loss'] < 1e-6
+        assert identifier.fit_info_["per_output"][0]["final_loss"] < 1e-6

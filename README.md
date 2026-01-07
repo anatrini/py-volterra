@@ -2,20 +2,23 @@
 
 Production-ready **Tensor-Train based Volterra system identification** for nonlinear MIMO audio/acoustic systems.
 
-Efficient diagonal Volterra (memory polynomial) identification using state-of-the-art Tensor-Train decomposition, avoiding the curse of dimensionality.
+Comprehensive library supporting diagonal (memory polynomial), generalized memory polynomial (GMP), and full tensor-train Volterra models with automatic model selection.
 
 ## Features
 
-- **TT-Volterra Identification**: SISO and MIMO nonlinear system identification
-- **Diagonal Volterra Models**: Memory polynomials / Generalized Hammerstein
+- **Multiple Model Complexities**:
+  - **Diagonal Volterra**: Memory polynomials / Generalized Hammerstein (O(M·N) params)
+  - **GMP**: Generalized Memory Polynomial with selective cross-memory terms
+  - **Full TT-Volterra**: Arbitrary-rank tensor-train with cross-memory interactions (O(M·r²·I·N))
+- **Automatic Model Selection**: Intelligent selection between MP, GMP, and TT using AIC/BIC/NMSE
 - **Multiple Solvers**:
   - **ALS**: Batch fixed-rank (stationary systems, highest accuracy)
   - **RLS**: Online/adaptive (time-varying systems, real-time)
   - **MALS**: Adaptive-rank (experimental)
-- **MIMO Support**: Additive model with separate kernels per input
-- **Efficient**: O(M·T·N²) complexity, suitable for high-order (M=5+)
-- **Numerically Stable**: Machine precision coefficient recovery
-- **Production Ready**: 226 tests, 68% coverage, comprehensive documentation
+- **MIMO Support**: Full support for multi-input multi-output systems
+- **Efficient**: Tensor-train decomposition avoids curse of dimensionality
+- **Numerically Stable**: High-precision coefficient recovery (< 1e-12 MSE for well-posed problems)
+- **Production Ready**: 357 tests, 76% coverage, comprehensive documentation
 
 ## Installation
 
@@ -120,9 +123,97 @@ plt.title('RLS Adaptation')
 plt.show()
 ```
 
-## Mathematical Model
+### Automatic Model Selection
 
-**Diagonal Volterra (Memory Polynomial):**
+```python
+from volterra.model_selection import ModelSelector
+
+# Generate test data
+x_train = np.random.randn(2000)
+y_train = 0.8*x_train + 0.15*x_train**2 + 0.05*x_train[:]*x_train[:]**2  # With cross-memory
+
+# Automatic model selection (tries Diagonal MP, GMP, and TT-Full)
+selector = ModelSelector(
+    memory_length=10,
+    order=3,
+    try_diagonal=True,
+    try_gmp=True,
+    try_tt_full=False,
+    selection_criterion='bic'  # Use Bayesian Information Criterion
+)
+selector.fit(x_train, y_train)
+
+# See selection rationale
+print(selector.explain())
+
+# Selected model: GMP
+# NMSE: 1.23e-06, AIC: -2847.2, BIC: -2801.5
+
+# Predict with best model
+y_pred = selector.predict(x_test)
+```
+
+### Generalized Memory Polynomial (GMP)
+
+```python
+from volterra.models import GeneralizedMemoryPolynomial, GMPConfig
+
+# Configure GMP with selective cross-memory terms
+config = GMPConfig(
+    max_cross_lag_distance=3,  # Cross-terms between lags up to 3 samples apart
+    max_cross_order=2,          # Max total order for cross-terms (x^p * x^q where p+q <= 2)
+    regularization=1e-6
+)
+
+model = GeneralizedMemoryPolynomial(
+    memory_length=15,
+    order=3,
+    config=config
+)
+
+# Fit and predict
+model.fit(x_train, y_train)
+y_pred = model.predict(x_test)
+
+# Export for C++/Rust deployment
+export = model.export_model()
+print(f"Total terms: {model.total_terms}")
+```
+
+### Full TT-Volterra with Arbitrary Ranks
+
+```python
+from volterra.models import TTVolterraMIMO, TTVolterraFullConfig
+
+# Full TT-Volterra with cross-memory interactions
+config = TTVolterraFullConfig(
+    max_iter=100,
+    tol=1e-6,
+    regularization=1e-6,
+    verbose=True
+)
+
+model = TTVolterraMIMO(
+    memory_length=10,
+    order=3,
+    ranks=[1, 3, 2, 1],  # TT ranks (boundary ranks must be 1)
+    config=config
+)
+
+# Fit with full TT-ALS
+model.fit(x_train, y_train)
+y_pred = model.predict(x_test)
+
+# Access TT cores and diagnostics
+cores = model.get_cores(output_idx=0)
+diagnostics = model.diagnostics(output_idx=0)
+print(f"Total parameters: {model.total_parameters}")
+print(f"Final loss: {diagnostics['final_loss']:.6e}")
+```
+
+## Mathematical Models
+
+### 1. Diagonal Volterra (Memory Polynomial)
 
 ```
 y(t) = ∑_{m=1}^M ∑_{i=0}^{N-1} h_m[i] · x[t-i]^m
@@ -131,17 +222,51 @@ y(t) = ∑_{m=1}^M ∑_{i=0}^{N-1} h_m[i] · x[t-i]^m
 - **M**: Volterra order (polynomial degree)
 - **N**: Memory length (number of delays)
 - **h_m[i]**: Kernel coefficient for order m at delay i
+- **Parameters**: M × N (linear scaling)
 
-**Parameters:** M × N (vs O(N^M) for full Volterra)
-
-**MIMO Additive Model:**
+### 2. Generalized Memory Polynomial (GMP)
 
 ```
-y(t) = ∑_{i=1}^I ∑_{m=1}^M ∑_{k=0}^{N-1} h_{i,m}[k] · x_i[t-k]^m
+y(t) = ∑_{m=1}^M ∑_{k=0}^{N-1} h_m[k] · x[t-k]^m
+       + ∑_{cross-terms} c_{k1,k2,p,q} · x[t-k1]^p · x[t-k2]^q
 ```
 
-- Each input channel has its own set of Volterra kernels
-- Outputs are summed
+- Diagonal terms plus selective cross-memory interactions
+- Cross-terms: |k1-k2| ≤ max_cross_lag, p+q ≤ max_cross_order
+- **Parameters**: M × N + (configurable cross-terms)
+- **Complexity**: Between diagonal MP and full Volterra
+
+### 3. Full TT-Volterra with Arbitrary Ranks
+
+```
+y(t) = ∑_{i1,...,iM} G[i1,...,iM] · ∏_{m=1}^M x[t-i_m]
+```
+
+Represented in Tensor-Train format:
+```
+G[i1,...,iM] = G_1[i1] · G_2[i2] · ... · G_M[iM]
+```
+
+- **G_m**: TT core of shape (r_{m-1}, I×N, r_m)
+- **Ranks**: [r_0=1, r_1, ..., r_{M-1}, r_M=1]
+- **Parameters**: O(M × r² × I × N) for equal internal ranks r
+- **Captures cross-memory interactions** with controlled complexity
+
+### MIMO Models
+
+All models support multi-input multi-output (MIMO):
+```
+y_o(t) = f_o(x_1[t], ..., x_I[t])  for each output o = 1, ..., O
+```
+
+**Array Shapes:**
+- Input `x`: shape `(T, I)` where T = number of samples, I = number of input channels
+- Output `y`: shape `(T, O)` where O = number of output channels
+- SISO is special case with I=1, O=1
+
+**Implementation:**
+- Separate model per output channel (baseline)
+- Shared parameters across outputs (advanced, experimental)
 
 ## Performance
 
@@ -151,9 +276,9 @@ y(t) = ∑_{i=1}^I ∑_{m=1}^M ∑_{k=0}^{N-1} h_{i,m}[k] · x_i[t-k]^m
 | M=5, N=20 | 100 | O(5·T·400) | Audio effects |
 | M=7, N=50 | 350 | O(7·T·2500) | High-fidelity |
 
-**Convergence:** Typically 20-50 iterations
+**Convergence:** Typically 20-50 iterations for diagonal models
 
-**Accuracy:** < 1e-20 MSE on clean data, machine precision coefficient recovery
+**Accuracy:** High precision on well-conditioned problems (MSE < 1e-12 for diagonal models with clean data)
 
 ## Solvers Comparison
 
@@ -179,7 +304,7 @@ py-volterra/
 │   │   └── acoustic_chain.py      # Nonlinear → RIR pipeline
 │   └── utils/
 │       └── shapes.py              # MIMO data utilities
-├── tests/                         # 226 tests, 68% coverage
+├── tests/                         # 357 tests, 76% coverage
 │   ├── test_tt_als_real.py       # Diagonal TT-ALS tests
 │   ├── test_mimo_rls.py          # MIMO and RLS tests
 │   └── test_tt_volterra_identifier.py
@@ -210,7 +335,7 @@ uv run pytest tests/test_mimo_rls.py       # MIMO and RLS tests
 uv run pytest --cov=volterra --cov-report=html
 ```
 
-**Test Results:** 226 tests passing, 68% coverage
+**Test Results:** 357 tests passing, 76% coverage
 
 ## Use Cases
 
@@ -242,7 +367,15 @@ uv run pytest --cov=volterra --cov-report=html
 
 ## Version History
 
-**v0.7.0** (Current)
+**v0.7.3** (Current)
+- ✅ Full TT-Volterra with arbitrary ranks (TTVolterraMIMO)
+- ✅ Generalized Memory Polynomial (GMP) with selective cross-terms
+- ✅ Automatic model selection (ModelSelector) with AIC/BIC/NMSE
+- ✅ TT-ALS primitives (cores, orthogonalization, rank truncation)
+- ✅ 131 new tests (357 total, 76% coverage)
+- ✅ Comprehensive documentation and technical guides
+
+**v0.7.0**
 - ✅ MIMO support (additive diagonal Volterra)
 - ✅ RLS online/adaptive solver
 - ✅ 17 new tests (MIMO + RLS)
@@ -256,12 +389,27 @@ uv run pytest --cov=volterra --cov-report=html
 
 ## References
 
-1. Boyd, S., Tang, Y.Y., & Chua, L.O. (1983). "Measuring Volterra kernels", IEEE Trans. Circuits and Systems
+### Volterra Series and Nonlinear System Identification
+1. Boyd, S., Tang, Y.Y., & Chua, L.O. (1983). "Measuring Volterra kernels", IEEE Trans. Circuits and Systems, 30(8), 571-577. DOI: [10.1109/TCS.1983.1085391](https://doi.org/10.1109/TCS.1983.1085391)
 2. Schetzen, M. (1980). "The Volterra and Wiener Theories of Nonlinear Systems", Wiley
-3. Oseledets, I.V. (2011). "Tensor-Train Decomposition", SIAM J. Sci. Comput.
-4. Novak, A. et al. (2015). "Synchronized Swept-Sine", JAES
-5. Haykin, S. (2002). "Adaptive Filter Theory", Prentice Hall
-6. Diniz, P.S.R. (2013). "Adaptive Filtering", Springer
+3. Novak, A., Lotton, P., & Simon, L. (2015). "Synchronized Swept-Sine: Theory, Application, and Implementation", Journal of the Audio Engineering Society, 63(10), 786-798. DOI: [10.17743/jaes.2015.0071](https://doi.org/10.17743/jaes.2015.0071)
+
+### Tensor-Train Decomposition and TT-ALS
+4. Oseledets, I.V. (2011). "Tensor-Train Decomposition", SIAM J. Sci. Comput., 33(5), 2295-2317. DOI: [10.1137/090752286](https://doi.org/10.1137/090752286)
+5. Holtz, S., Rohwedder, T., & Schneider, R. (2012). "The Alternating Linear Scheme for Tensor Optimization in the Tensor Train Format", SIAM J. Sci. Comput., 34(2), A683-A713. DOI: [10.1137/100818893](https://doi.org/10.1137/100818893)
+6. Steinlechner, M. (2016). "Riemannian Optimization for High-Dimensional Tensor Completion", SIAM J. Sci. Comput., 38(5), S461-S484. DOI: [10.1137/15M1010506](https://doi.org/10.1137/15M1010506)
+7. Batselier, K., Chen, Z., & Wong, N. (2017). "Tensor Network Alternating Linear Scheme for MIMO Volterra System Identification", Automatica, 84, 26-35. DOI: [10.1016/j.automatica.2017.06.033](https://doi.org/10.1016/j.automatica.2017.06.033)
+
+### Generalized Memory Polynomial
+8. Morgan, D.R., Ma, Z., Kim, J., Zierdt, M.G., & Pastalan, J. (2006). "A Generalized Memory Polynomial Model for Digital Predistortion of RF Power Amplifiers", IEEE Transactions on Signal Processing, 54(10), 3852-3860. DOI: [10.1109/TSP.2006.879264](https://doi.org/10.1109/TSP.2006.879264)
+
+### Model Selection
+9. Akaike, H. (1974). "A new look at the statistical model identification", IEEE Transactions on Automatic Control, 19(6), 716-723. DOI: [10.1109/TAC.1974.1100705](https://doi.org/10.1109/TAC.1974.1100705)
+10. Schwarz, G. (1978). "Estimating the Dimension of a Model", The Annals of Statistics, 6(2), 461-464. DOI: [10.1214/aos/1176344136](https://doi.org/10.1214/aos/1176344136)
+
+### Adaptive Filtering
+11. Haykin, S. (2002). "Adaptive Filter Theory", Prentice Hall (4th edition)
+12. Diniz, P.S.R. (2013). "Adaptive Filtering: Algorithms and Practical Implementation", Springer (4th edition)
 
 ## License
 

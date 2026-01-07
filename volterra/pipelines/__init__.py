@@ -8,11 +8,11 @@ This module provides composable building blocks for realistic system modeling:
 """
 
 from volterra.pipelines.acoustic_chain import (
-    NonlinearThenRIR,
     AcousticChainConfig,
+    NonlinearThenRIR,
 )
 
 __all__ = [
-    "NonlinearThenRIR",
     "AcousticChainConfig",
+    "NonlinearThenRIR",
 ]

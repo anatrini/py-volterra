@@ -9,7 +9,6 @@ focuses on the diagonal case which captures most practical scenarios.
 """
 
 import numpy as np
-from typing import List, Tuple
 from scipy import linalg
 
 
@@ -38,12 +37,12 @@ def build_delay_matrix_simple(x: np.ndarray, memory_length: int) -> np.ndarray:
     X_delay = np.zeros((T_valid, N))
     for t in range(T_valid):
         # Most recent to oldest: x[t+N-1], ..., x[t]
-        X_delay[t, :] = x[t:t+N][::-1]
+        X_delay[t, :] = x[t : t + N][::-1]
 
     return X_delay
 
 
-def evaluate_diagonal_volterra(cores: List[np.ndarray], X_delay: np.ndarray) -> np.ndarray:
+def evaluate_diagonal_volterra(cores: list[np.ndarray], X_delay: np.ndarray) -> np.ndarray:
     """
     Evaluate diagonal Volterra model.
 
@@ -90,8 +89,8 @@ def fit_diagonal_volterra_als(
     max_iter: int = 50,
     tol: float = 1e-6,
     regularization: float = 1e-8,
-    verbose: bool = False
-) -> Tuple[List[np.ndarray], dict]:
+    verbose: bool = False,
+) -> tuple[list[np.ndarray], dict]:
     """
     Fit diagonal Volterra (memory polynomial) using alternating least squares.
 
@@ -133,13 +132,13 @@ def fit_diagonal_volterra_als(
     T_valid = X_delay.shape[0]
 
     # Align y
-    y_valid = y[N-1:N-1+T_valid]
+    y_valid = y[N - 1 : N - 1 + T_valid]
 
     # Build feature matrix: [X, X^2, X^3, ..., X^M]
     # Shape: (T_valid, N*M)
     Phi_full = np.zeros((T_valid, N * M))
     for m in range(M):
-        Phi_full[:, m*N:(m+1)*N] = X_delay ** (m + 1)
+        Phi_full[:, m * N : (m + 1) * N] = X_delay ** (m + 1)
 
     # Initialize cores
     cores = []
@@ -167,7 +166,7 @@ def fit_diagonal_volterra_als(
             # Ridge regression
             A = Phi_m.T @ Phi_m + regularization * np.eye(N)
             b = Phi_m.T @ residual
-            h_m = linalg.solve(A, b, assume_a='pos')
+            h_m = linalg.solve(A, b, assume_a="pos")
 
             # Update core
             cores[m][0, :, 0] = h_m
@@ -193,20 +192,20 @@ def fit_diagonal_volterra_als(
     else:
         converged = False
         if verbose:
-            print(f"Max iterations reached")
+            print("Max iterations reached")
 
     info = {
-        'loss_history': loss_history,
-        'iterations': len(loss_history),
-        'converged': converged,
-        'final_loss': loss_history[-1] if loss_history else np.inf,
-        'method': 'diagonal_als'
+        "loss_history": loss_history,
+        "iterations": len(loss_history),
+        "converged": converged,
+        "final_loss": loss_history[-1] if loss_history else np.inf,
+        "method": "diagonal_als",
     }
 
     return cores, info
 
 
-def build_delay_matrix_mimo(x: np.ndarray, memory_length: int) -> List[np.ndarray]:
+def build_delay_matrix_mimo(x: np.ndarray, memory_length: int) -> list[np.ndarray]:
     """
     Build delay matrices for MIMO inputs.
 
@@ -237,8 +236,8 @@ def fit_diagonal_volterra_mimo_als(
     max_iter: int = 50,
     tol: float = 1e-6,
     regularization: float = 1e-8,
-    verbose: bool = False
-) -> Tuple[List[List[np.ndarray]], dict]:
+    verbose: bool = False,
+) -> tuple[list[list[np.ndarray]], dict]:
     """
     Fit diagonal Volterra for MIMO systems using additive model.
 
@@ -281,7 +280,7 @@ def fit_diagonal_volterra_mimo_als(
     T_valid = X_delays[0].shape[0]
 
     # Align y
-    y_valid = y[N-1:N-1+T_valid]
+    y_valid = y[N - 1 : N - 1 + T_valid]
 
     # Initialize cores for each input channel
     cores_per_input = []
@@ -322,7 +321,7 @@ def fit_diagonal_volterra_mimo_als(
                 # Ridge regression
                 A = Phi_m.T @ Phi_m + regularization * np.eye(N)
                 b = Phi_m.T @ residual
-                h_m = linalg.solve(A, b, assume_a='pos')
+                h_m = linalg.solve(A, b, assume_a="pos")
 
                 # Update core
                 cores_i[m][0, :, 0] = h_m
@@ -351,15 +350,15 @@ def fit_diagonal_volterra_mimo_als(
     else:
         converged = False
         if verbose:
-            print(f"Max iterations reached")
+            print("Max iterations reached")
 
     info = {
-        'loss_history': loss_history,
-        'iterations': len(loss_history),
-        'converged': converged,
-        'final_loss': loss_history[-1] if loss_history else np.inf,
-        'method': 'mimo_diagonal_als',
-        'n_inputs': I
+        "loss_history": loss_history,
+        "iterations": len(loss_history),
+        "converged": converged,
+        "final_loss": loss_history[-1] if loss_history else np.inf,
+        "method": "mimo_diagonal_als",
+        "n_inputs": I,
     }
 
     return cores_per_input, info
@@ -372,8 +371,8 @@ def fit_diagonal_volterra_rls(
     order: int,
     forgetting_factor: float = 0.99,
     regularization: float = 1e-4,
-    verbose: bool = False
-) -> Tuple[List[np.ndarray], dict]:
+    verbose: bool = False,
+) -> tuple[list[np.ndarray], dict]:
     """
     Fit diagonal Volterra using online Recursive Least Squares (RLS).
 
@@ -434,7 +433,7 @@ def fit_diagonal_volterra_rls(
     h_history = []
 
     # Process samples sequentially
-    for t in range(N-1, T):
+    for t in range(N - 1, T):
         # Build feature vector φ(t) = [x(t)^1, x(t-1)^1, ..., x(t)^2, x(t-1)^2, ..., x(t)^M, ...]
         phi = np.zeros(n_params)
         for m in range(M):
@@ -460,7 +459,7 @@ def fit_diagonal_volterra_rls(
         P = (P - np.outer(k, phi) @ P) / forgetting_factor
 
         # Track MSE
-        mse_history.append(e ** 2)
+        mse_history.append(e**2)
         if verbose and (t - N + 1) % 100 == 0:
             avg_mse = np.mean(mse_history[-100:])
             print(f"Sample {t}: MSE={avg_mse:.6e}")
@@ -471,15 +470,17 @@ def fit_diagonal_volterra_rls(
     cores = []
     for m in range(M):
         core = np.zeros((1, N, 1))
-        core[0, :, 0] = h[m * N:(m + 1) * N]
+        core[0, :, 0] = h[m * N : (m + 1) * N]
         cores.append(core)
 
     info = {
-        'mse_history': np.array(mse_history),
-        'final_mse': np.mean(mse_history[-100:]) if len(mse_history) >= 100 else np.mean(mse_history),
-        'h_history': np.array(h_history),
-        'method': 'rls',
-        'forgetting_factor': forgetting_factor
+        "mse_history": np.array(mse_history),
+        "final_mse": (
+            np.mean(mse_history[-100:]) if len(mse_history) >= 100 else np.mean(mse_history)
+        ),
+        "h_history": np.array(h_history),
+        "method": "rls",
+        "forgetting_factor": forgetting_factor,
     }
 
     return cores, info

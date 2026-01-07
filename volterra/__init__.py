@@ -67,61 +67,71 @@ See documentation for TTVolterraIdentifier, VolterraProcessorFull, and
 NonlinearThenRIR for detailed examples.
 """
 
-from volterra.kernels_full import VolterraKernelFull, ArrayF
 from volterra.engines_diagonal import (
-    VolterraFullEngine,
-    DiagonalNumpyEngine,
-    DiagonalNumbaEngine,
     NUMBA_AVAILABLE,
+    DiagonalNumbaEngine,
+    DiagonalNumpyEngine,
+    VolterraFullEngine,
 )
-from volterra.processor_full import VolterraProcessorFull
+from volterra.kernels_full import ArrayF, VolterraKernelFull
 
 # System identification (TT-based MIMO Volterra)
 from volterra.models import (
-    TTVolterraIdentifier,
     TTVolterraConfig,
+    TTVolterraIdentifier,
 )
 
 # Pipelines (composable processing chains)
 from volterra.pipelines import (
-    NonlinearThenRIR,
     AcousticChainConfig,
+    NonlinearThenRIR,
 )
+from volterra.processor_full import VolterraProcessorFull
+
+# Optional performance engines - these are exported if available
+__all_optional__ = []
 
 # Optimized engines (optional, requires Numba)
 try:
-    from volterra.engines_optimized import (
+    from volterra.engines_optimized import (  # noqa: F401 - exported via __all__
         OptimizedDiagonalEngine,
         OptimizedNumbaEngine,
     )
-    __all_optional__ = [
-        "OptimizedDiagonalEngine",
-        "OptimizedNumbaEngine",
-    ]
+
+    __all_optional__.extend(
+        [
+            "OptimizedDiagonalEngine",
+            "OptimizedNumbaEngine",
+        ]
+    )
 except ImportError:
-    __all_optional__ = []
+    pass
 
 # FFT-optimized engines (automatic selection in processor)
 try:
-    from volterra.engines_fft import (
+    from volterra.engines_fft import (  # noqa: F401 - exported via __all__
         FFTOptimizedEngine,
         FFTOptimizedNumbaEngine,
     )
-    __all_optional__.extend([
-        "FFTOptimizedEngine",
-        "FFTOptimizedNumbaEngine",
-    ])
+
+    __all_optional__.extend(
+        [
+            "FFTOptimizedEngine",
+            "FFTOptimizedNumbaEngine",
+        ]
+    )
 except ImportError:
     pass
 
 # Vectorized engines (NO Python loops)
 try:
-    from volterra.engines_vectorized import VectorizedEngine
+    from volterra.engines_vectorized import VectorizedEngine  # noqa: F401 - exported via __all__
+
     __all_optional__.append("VectorizedEngine")
 except ImportError:
     pass
 
-__version__ = "0.7.0"
+__version__ = "0.8.0"
 
 __all__ = [
     # Core types
