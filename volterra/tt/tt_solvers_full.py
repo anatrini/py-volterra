@@ -138,13 +138,17 @@ def build_unfolded_data_matrix(
     # With orthogonalized cores: contract left and right
     # Left contraction: cores 0 to k-1
     if left_cores is not None and len(left_cores) > 0:
-        # Contract left cores with delay data
+        # Contract left cores with delay data sequentially
         left_product = np.ones((T_valid, 1))  # Start with (T_valid, 1)
         for lc in left_cores:
-            # lc shape: (r_prev, N, r_next)
-            # Contract with X_delay: sum over N dimension
-            # Result: (T_valid, r_next)
-            left_product = np.einsum("ti,ijk->tjk", X_delay, lc).reshape(T_valid, -1)
+            # lc shape: (r_in, N, r_out)
+            # X_delay: (T_valid, N)
+            # Contract X_delay with lc over N dimension: (T, N) @ (r_in, N, r_out) -> (T, r_in, r_out)
+            temp = np.einsum("ti,jik->tjk", X_delay, lc)  # (T_valid, r_in, r_out)
+            # Contract left_product (T, r_prev) with temp (T, r_in, r_out)
+            # r_prev must equal r_in for valid contraction
+            # Batched matrix multiply along time: (T, r_prev) @ (T, r_prev, r_out) -> (T, r_out)
+            left_product = np.einsum("tr,trk->tk", left_product, temp)  # (T_valid, r_out)
 
         r_left = left_product.shape[1]
     else:
@@ -153,11 +157,16 @@ def build_unfolded_data_matrix(
 
     # Right contraction: cores k+1 to M-1
     if right_cores is not None and len(right_cores) > 0:
-        # Contract right cores with delay data
-        right_product = np.ones((T_valid, 1))
+        # Contract right cores with delay data sequentially (reversed order)
+        # For right cores, we process from right to left (reversed)
+        right_product = np.ones((T_valid, 1))  # Start with (T_valid, 1)
         for rc in reversed(right_cores):
-            # Similar contraction
-            right_product = np.einsum("ti,ijk->tjk", X_delay, rc).reshape(T_valid, -1)
+            # rc shape: (r_in, N, r_out)
+            # Contract X_delay (T, N) with rc (r_in, N, r_out) over N
+            temp = np.einsum("ti,jik->tjk", X_delay, rc)  # (T_valid, r_in, r_out)
+            # Contract temp's r_out with right_product's first rank
+            # (T, r_in, r_out) @ (T, r_out) -> (T, r_in)  (contract over r_out)
+            right_product = np.einsum("tij,tj->ti", temp, right_product)  # (T_valid, r_in)
 
         r_right = right_product.shape[1]
     else:
